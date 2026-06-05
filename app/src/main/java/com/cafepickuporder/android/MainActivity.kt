@@ -1,6 +1,7 @@
 package com.cafepickuporder.android
 
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
@@ -11,6 +12,9 @@ import androidx.compose.runtime.setValue
 import com.cafepickuporder.android.ui.login.LoginScreen
 import com.cafepickuporder.android.ui.mypage.MyPageScreen
 import com.cafepickuporder.android.ui.signup.SignupScreen
+import com.cafepickuporder.android.ui.store.MenuDetailScreen
+import com.cafepickuporder.android.ui.store.MenuListScreen
+import com.cafepickuporder.android.ui.store.StoreListScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
 
 class MainActivity : ComponentActivity() {
@@ -28,10 +32,40 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App() {
     var screen by remember { mutableStateOf("login") }
+    var selectedStoreId by remember { mutableStateOf<Long?>(null) }
+    var selectedMenuId by remember { mutableStateOf<Long?>(null) }
+
+    BackHandler(enabled = screen != "login") {
+        when (screen) {
+            "signup" -> {
+                screen = "login"
+            }
+
+            "mypage" -> {
+                screen = "store"
+            }
+
+            "store" -> {
+                screen = "mypage"
+            }
+
+            "menuList" -> {
+                screen = "store"
+            }
+
+            "menuDetail" -> {
+                screen = "menuList"
+            }
+
+            else -> {
+                screen = "login"
+            }
+        }
+    }
 
     when (screen) {
         "login" -> LoginScreen(
-            onLoginSuccess = { screen = "mypage" },
+            onLoginSuccess = { screen = "store" },
             onMoveToSignup = { screen = "signup" }
         )
 
@@ -41,6 +75,36 @@ fun App() {
 
         "mypage" -> MyPageScreen(
             onLogout = { screen = "login" }
+        )
+
+        "store" -> StoreListScreen(
+            onMyPageClick = {
+                screen = "mypage"
+            },
+            onStoreClick = { storeId ->
+                selectedStoreId = storeId
+                screen = "menuList"
+            }
+        )
+
+        "menuList" -> MenuListScreen(
+            storeId = selectedStoreId ?: 0L,
+            onBackClick = {
+                screen = "store"
+            },
+            onMenuClick = { storeId, menuId ->
+                selectedStoreId = storeId
+                selectedMenuId = menuId
+                screen = "menuDetail"
+            }
+        )
+
+        "menuDetail" -> MenuDetailScreen(
+            storeId = selectedStoreId ?: 0L,
+            menuId = selectedMenuId ?: 0L,
+            onBackClick = {
+                screen = "menuList"
+            }
         )
     }
 }
