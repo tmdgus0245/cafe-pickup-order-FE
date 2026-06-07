@@ -33,12 +33,16 @@ import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.response.MenuDetailResponse
 import com.cafepickuporder.android.data.response.MenuOptionGroupResponse
 import com.cafepickuporder.android.data.response.MenuOptionResponse
+import com.cafepickuporder.android.data.model.CartItem
+import com.cafepickuporder.android.data.model.CartOption
+import com.cafepickuporder.android.ui.cart.CartManager
 
 @Composable
 fun MenuDetailScreen(
     storeId: Long,
     menuId: Long,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onAddedToCart: () -> Unit
 ) {
     var menu by remember { mutableStateOf<MenuDetailResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -104,6 +108,7 @@ fun MenuDetailScreen(
                 MenuDetailContent(
                     menu = menu!!,
                     onBackClick = onBackClick,
+                    onAddedToCart = onAddedToCart,
                     selectedOptions = selectedOptions,
                     onOptionSelected = { optionGroupId, option ->
                         selectedOptions[optionGroupId] = option
@@ -117,8 +122,9 @@ fun MenuDetailScreen(
 @Composable
 private fun MenuDetailContent(
     menu: MenuDetailResponse,
-    onBackClick: () -> Unit,
     selectedOptions: MutableMap<Long, MenuOptionResponse>,
+    onBackClick: () -> Unit,
+    onAddedToCart: () -> Unit,
     onOptionSelected: (optionGroupId: Long, option: MenuOptionResponse) -> Unit
 ) {
     val totalPrice = menu.price + selectedOptions.values.sumOf { it.additionalPrice }
@@ -176,7 +182,28 @@ private fun MenuDetailContent(
 
         Button(
             onClick = {
-                // 다음 단계에서 장바구니 API 연결
+                val cartOptions = selectedOptions.map { entry ->
+                    val optionGroupId = entry.key
+                    val option = entry.value
+
+                    CartOption(
+                        optionGroupId = optionGroupId,
+                        optionId = option.optionId,
+                        name = option.name,
+                        additionalPrice = option.additionalPrice
+                    )
+                }
+
+                val cartItem = CartItem(
+                    storeId = menu.storeId,
+                    menuId = menu.menuId,
+                    menuName = menu.name,
+                    basePrice = menu.price,
+                    options = cartOptions
+                )
+
+                CartManager.addItem(cartItem)
+                onAddedToCart()
             },
             modifier = Modifier.fillMaxWidth()
         ) {

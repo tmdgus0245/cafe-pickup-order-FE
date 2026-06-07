@@ -30,11 +30,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.response.MenuResponse
+import com.cafepickuporder.android.ui.cart.CartManager
 
 @Composable
 fun MenuListScreen(
     storeId: Long,
     onBackClick: () -> Unit,
+    onCartClick: () -> Unit,
     onMenuClick: (storeId: Long, menuId: Long) -> Unit
 ) {
     var menus by remember { mutableStateOf<List<MenuResponse>>(emptyList()) }
@@ -68,7 +70,9 @@ fun MenuListScreen(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            Column {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
                 Text(
                     text = "메뉴 선택",
                     style = MaterialTheme.typography.headlineSmall
@@ -80,6 +84,20 @@ fun MenuListScreen(
                     text = "주문할 메뉴를 선택해주세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            TextButton(
+                onClick = onCartClick
+            ) {
+                val cartCount = CartManager.cartItems.sumOf { it.quantity }
+
+                Text(
+                    text = if (cartCount > 0) {
+                        "장바구니 $cartCount"
+                    } else {
+                        "장바구니"
+                    }
                 )
             }
         }

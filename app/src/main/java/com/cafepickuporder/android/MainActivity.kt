@@ -16,6 +16,7 @@ import com.cafepickuporder.android.ui.store.MenuDetailScreen
 import com.cafepickuporder.android.ui.store.MenuListScreen
 import com.cafepickuporder.android.ui.store.StoreListScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
+import com.cafepickuporder.android.ui.cart.CartScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,6 +58,10 @@ fun App() {
                 screen = "menuList"
             }
 
+            "cart" -> {
+                screen = "menuList"
+            }
+
             else -> {
                 screen = "login"
             }
@@ -92,6 +97,9 @@ fun App() {
             onBackClick = {
                 screen = "store"
             },
+            onCartClick = {
+                screen = "cart"
+            },
             onMenuClick = { storeId, menuId ->
                 selectedStoreId = storeId
                 selectedMenuId = menuId
@@ -104,6 +112,18 @@ fun App() {
             menuId = selectedMenuId ?: 0L,
             onBackClick = {
                 screen = "menuList"
+            },
+            onAddedToCart = {
+                screen = "menuList"
+            }
+        )
+
+        "cart" -> CartScreen(
+            onBackClick = {
+                screen = "menuList"
+            },
+            onOrderClick = {
+                // 다음 단계에서 주문 생성 API 연결
             }
         )
     }
