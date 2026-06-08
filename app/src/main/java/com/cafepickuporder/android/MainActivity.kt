@@ -18,6 +18,7 @@ import com.cafepickuporder.android.ui.store.StoreListScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
 import com.cafepickuporder.android.ui.cart.CartScreen
 import com.cafepickuporder.android.ui.order.OrderCompleteScreen
+import com.cafepickuporder.android.ui.order.OrderListScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,6 +64,10 @@ fun App() {
                 screen = "menuList"
             }
 
+            "orderList" -> {
+                screen = "store"
+            }
+
             else -> {
                 screen = "login"
             }
@@ -86,6 +91,9 @@ fun App() {
         "store" -> StoreListScreen(
             onMyPageClick = {
                 screen = "mypage"
+            },
+            onOrderListClick = {
+                screen = "orderList"
             },
             onStoreClick = { storeId ->
                 selectedStoreId = storeId
@@ -132,6 +140,13 @@ fun App() {
 
         "orderComplete" -> OrderCompleteScreen(
             onGoStoreClick = {
+                screen = "store"
+            }
+        )
+
+        "orderList" -> OrderListScreen(
+            customerId = 1L,
+            onBackClick = {
                 screen = "store"
             }
         )

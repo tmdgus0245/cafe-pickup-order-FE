@@ -1,6 +1,5 @@
-package com.cafepickuporder.android.ui.store
+package com.cafepickuporder.android.ui.order
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,21 +28,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
-import com.cafepickuporder.android.data.response.StoreListResponse
+import com.cafepickuporder.android.data.response.OrderListResponse
 
 @Composable
-fun StoreListScreen(
-    onMyPageClick: () -> Unit,
-    onOrderListClick: () -> Unit,
-    onStoreClick: (Long) -> Unit
+fun OrderListScreen(
+    customerId: Long,
+    onBackClick: () -> Unit
 ) {
-    var stores by remember { mutableStateOf<List<StoreListResponse>>(emptyList()) }
+    var orders by remember { mutableStateOf<List<OrderListResponse>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(customerId) {
         try {
-            stores = ApiClient.storeApi.getStores()
+            orders = ApiClient.orderApi.getOrders(customerId)
         } catch (e: Exception) {
             errorMessage = e.message
         } finally {
@@ -60,37 +58,25 @@ fun StoreListScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f)
+            TextButton(
+                onClick = onBackClick
             ) {
+                Text("←")
+            }
+
+            Column {
                 Text(
-                    text = "매장 선택",
+                    text = "주문 내역",
                     style = MaterialTheme.typography.headlineSmall
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "주문할 매장을 선택해주세요.",
+                    text = "최근 주문 내역을 확인할 수 있습니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                TextButton(
-                    onClick = onOrderListClick
-                ) {
-                    Text("주문내역")
-                }
-
-                TextButton(
-                    onClick = onMyPageClick
-                ) {
-                    Text("내 정보")
-                }
             }
         }
 
@@ -103,26 +89,24 @@ fun StoreListScreen(
 
             errorMessage != null -> {
                 Text(
-                    text = "매장 정보를 불러오지 못했습니다.\n$errorMessage",
+                    text = "주문 내역을 불러오지 못했습니다.\n$errorMessage",
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
-            stores.isEmpty() -> {
-                Text("등록된 매장이 없습니다.")
+            orders.isEmpty() -> {
+                Text(
+                    text = "아직 주문 내역이 없습니다.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
             else -> {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(stores) { store ->
-                        StoreCard(
-                            store = store,
-                            onClick = {
-                                onStoreClick(store.storeId)
-                            }
-                        )
+                    items(orders) { order ->
+                        OrderCard(order = order)
                     }
                 }
             }
@@ -131,14 +115,11 @@ fun StoreListScreen(
 }
 
 @Composable
-private fun StoreCard(
-    store: StoreListResponse,
-    onClick: () -> Unit
+private fun OrderCard(
+    order: OrderListResponse
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
@@ -152,38 +133,47 @@ private fun StoreCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = store.name,
+                        text = order.storeName,
                         style = MaterialTheme.typography.titleMedium
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = store.address ?: "주소 정보 없음",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "주문번호 ${order.orderNumber}",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                OrderStatusBadge(status = store.status)
-            }
-
-            if (!store.description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = store.description,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                OrderStatusBadge(status = order.status)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "예상 준비 시간 ${store.averagePreparationMinutes ?: 0}분",
-                style = MaterialTheme.typography.labelMedium,
+                text = "결제 예정 금액 ${order.totalPrice}원",
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "주문 시간 ${formatDateTime(order.createdAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (!order.estimatedPickupTime.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "예상 픽업 시간 ${formatDateTime(order.estimatedPickupTime)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -197,7 +187,7 @@ private fun OrderStatusBadge(
         color = MaterialTheme.colorScheme.primaryContainer
     ) {
         Text(
-            text = displayStoreStatus(status),
+            text = displayOrderStatus(status),
             modifier = Modifier.padding(
                 horizontal = 12.dp,
                 vertical = 6.dp
@@ -208,11 +198,22 @@ private fun OrderStatusBadge(
     }
 }
 
-private fun displayStoreStatus(status: String): String {
+private fun displayOrderStatus(status: String): String {
     return when (status) {
-        "OPEN" -> "영업중"
-        "CLOSED" -> "영업종료"
-        "TEMPORARILY_CLOSED" -> "임시휴무"
+        "REQUESTED" -> "주문 완료"
+        "ACCEPTED" -> "접수 완료"
+        "READY" -> "픽업 준비 완료"
+        "COMPLETED" -> "픽업 완료"
+        "REJECTED" -> "거절됨"
+        "CANCELED" -> "취소됨"
         else -> status
     }
+}
+
+private fun formatDateTime(value: String?): String {
+    if (value.isNullOrBlank()) return "-"
+
+    return value
+        .replace("T", " ")
+        .take(16)
 }
