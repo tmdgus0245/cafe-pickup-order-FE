@@ -1,4 +1,7 @@
 package com.cafepickuporder.android.data.request
 
-class OrderCreateRequest {
-}
+data class OrderCreateRequest(
+    val storeId: Long,
+    val requestedPickupTime: String?,
+    val items: List<OrderItemCreateRequest>
+)

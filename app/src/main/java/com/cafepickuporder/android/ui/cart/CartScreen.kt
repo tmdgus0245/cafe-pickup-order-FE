@@ -18,18 +18,62 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.model.CartItem
+import com.cafepickuporder.android.data.remote.ApiClient
+import com.cafepickuporder.android.data.request.OrderCreateRequest
+import com.cafepickuporder.android.data.request.OrderItemCreateRequest
 
 @Composable
 fun CartScreen(
+    storeId: Long,
+    customerId: Long,
     onBackClick: () -> Unit,
-    onOrderClick: () -> Unit
+    onOrderSuccess: () -> Unit
 ) {
     val cartItems = CartManager.cartItems
     val totalPrice = CartManager.getTotalPrice()
+    var isOrdering by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(isOrdering) {
+        if (isOrdering) {
+            try {
+                val request = OrderCreateRequest(
+                    storeId = storeId,
+                    requestedPickupTime = null,
+                    items = CartManager.cartItems.map { cartItem ->
+                        OrderItemCreateRequest(
+                            menuId = cartItem.menuId,
+                            quantity = cartItem.quantity,
+                            optionIds = cartItem.options.map { option ->
+                                option.optionId
+                            }
+                        )
+                    }
+                )
+
+                ApiClient.orderApi.createOrder(
+                    customerId = customerId,
+                    request = request
+                )
+
+                CartManager.clear()
+                onOrderSuccess()
+            } catch (e: Exception) {
+                errorMessage = e.message
+            } finally {
+                isOrdering = false
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -79,11 +123,30 @@ fun CartScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            if (errorMessage != null) {
+                Text(
+                    text = "주문에 실패했습니다.\n$errorMessage",
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             Button(
-                onClick = onOrderClick,
-                modifier = Modifier.fillMaxWidth()
+                onClick = {
+                    isOrdering = true
+                    errorMessage = null
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isOrdering && cartItems.isNotEmpty()
             ) {
-                Text("주문하기")
+                Text(
+                    text = if (isOrdering) {
+                        "주문 중..."
+                    } else {
+                        "주문하기"
+                    }
+                )
             }
         }
     }

@@ -17,6 +17,7 @@ import com.cafepickuporder.android.ui.store.MenuListScreen
 import com.cafepickuporder.android.ui.store.StoreListScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
 import com.cafepickuporder.android.ui.cart.CartScreen
+import com.cafepickuporder.android.ui.order.OrderCompleteScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,11 +120,19 @@ fun App() {
         )
 
         "cart" -> CartScreen(
+            storeId = selectedStoreId ?: 0L,
+            customerId = 1L,
             onBackClick = {
                 screen = "menuList"
             },
-            onOrderClick = {
-                // 다음 단계에서 주문 생성 API 연결
+            onOrderSuccess = {
+                screen = "orderComplete"
+            }
+        )
+
+        "orderComplete" -> OrderCompleteScreen(
+            onGoStoreClick = {
+                screen = "store"
             }
         )
     }
