@@ -71,7 +71,7 @@ fun StoreListScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "주문할 매장을 선택해주세요.",
+                    text = "주문할 매장을 선택해 주세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -80,15 +80,11 @@ fun StoreListScreen(
             Column(
                 horizontalAlignment = Alignment.End
             ) {
-                TextButton(
-                    onClick = onOrderListClick
-                ) {
-                    Text("주문내역")
+                TextButton(onClick = onOrderListClick) {
+                    Text("주문 내역")
                 }
 
-                TextButton(
-                    onClick = onMyPageClick
-                ) {
+                TextButton(onClick = onMyPageClick) {
                     Text("내 정보")
                 }
             }
@@ -165,7 +161,7 @@ private fun StoreCard(
                     )
                 }
 
-                OrderStatusBadge(status = store.status)
+                StoreStatusBadge(status = store.status)
             }
 
             if (!store.description.isNullOrBlank()) {
@@ -189,7 +185,7 @@ private fun StoreCard(
 }
 
 @Composable
-private fun OrderStatusBadge(
+private fun StoreStatusBadge(
     status: String
 ) {
     Surface(
@@ -210,9 +206,9 @@ private fun OrderStatusBadge(
 
 private fun displayStoreStatus(status: String): String {
     return when (status) {
-        "OPEN" -> "영업중"
-        "CLOSED" -> "영업종료"
-        "TEMPORARILY_CLOSED" -> "임시휴무"
+        "OPEN" -> "영업 중"
+        "CLOSED" -> "영업 종료"
+        "TEMPORARILY_CLOSED" -> "임시 휴무"
         else -> status
     }
 }

@@ -14,7 +14,9 @@ import com.cafepickuporder.android.ui.mypage.MyPageScreen
 import com.cafepickuporder.android.ui.signup.SignupScreen
 import com.cafepickuporder.android.ui.store.MenuDetailScreen
 import com.cafepickuporder.android.ui.store.MenuListScreen
+import com.cafepickuporder.android.ui.store.StoreLoginScreen
 import com.cafepickuporder.android.ui.store.StoreListScreen
+import com.cafepickuporder.android.ui.store.StoreOrderManagementScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
 import com.cafepickuporder.android.ui.cart.CartScreen
 import com.cafepickuporder.android.ui.order.OrderCompleteScreen
@@ -37,11 +39,22 @@ fun App() {
     var screen by remember { mutableStateOf("login") }
     var selectedStoreId by remember { mutableStateOf<Long?>(null) }
     var selectedMenuId by remember { mutableStateOf<Long?>(null) }
+    var customerId by remember { mutableStateOf<Long?>(null) }
+    var managerStoreId by remember { mutableStateOf<Long?>(null) }
+    var managerAccessToken by remember { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = screen != "login") {
         when (screen) {
             "signup" -> {
                 screen = "login"
+            }
+
+            "storeLogin" -> {
+                screen = "login"
+            }
+
+            "storeOrders" -> {
+                screen = "storeLogin"
             }
 
             "mypage" -> {
@@ -76,8 +89,33 @@ fun App() {
 
     when (screen) {
         "login" -> LoginScreen(
-            onLoginSuccess = { screen = "store" },
-            onMoveToSignup = { screen = "signup" }
+            onLoginSuccess = { loggedInCustomerId ->
+                customerId = loggedInCustomerId
+                screen = "store"
+            },
+            onMoveToSignup = { screen = "signup" },
+            onStoreLoginClick = { screen = "storeLogin" }
+        )
+
+        "storeLogin" -> StoreLoginScreen(
+            onLoginSuccess = { storeId, accessToken ->
+                managerStoreId = storeId
+                managerAccessToken = accessToken
+                screen = "storeOrders"
+            },
+            onCustomerLoginClick = {
+                screen = "login"
+            }
+        )
+
+        "storeOrders" -> StoreOrderManagementScreen(
+            storeId = managerStoreId ?: 0L,
+            accessToken = managerAccessToken.orEmpty(),
+            onLogout = {
+                managerStoreId = null
+                managerAccessToken = null
+                screen = "storeLogin"
+            }
         )
 
         "signup" -> SignupScreen(
@@ -85,7 +123,10 @@ fun App() {
         )
 
         "mypage" -> MyPageScreen(
-            onLogout = { screen = "login" }
+            onLogout = {
+                customerId = null
+                screen = "login"
+            }
         )
 
         "store" -> StoreListScreen(
@@ -129,7 +170,7 @@ fun App() {
 
         "cart" -> CartScreen(
             storeId = selectedStoreId ?: 0L,
-            customerId = 1L,
+            customerId = customerId ?: 0L,
             onBackClick = {
                 screen = "menuList"
             },
@@ -145,7 +186,7 @@ fun App() {
         )
 
         "orderList" -> OrderListScreen(
-            customerId = 1L,
+            customerId = customerId ?: 0L,
             onBackClick = {
                 screen = "store"
             }

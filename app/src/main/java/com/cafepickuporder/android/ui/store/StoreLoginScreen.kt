@@ -1,4 +1,4 @@
-package com.cafepickuporder.android.ui.login
+package com.cafepickuporder.android.ui.store
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,15 +20,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
-import com.cafepickuporder.android.data.request.LoginRequest
+import com.cafepickuporder.android.data.request.StoreAccountLoginRequest
 import com.cafepickuporder.android.local.TokenManager
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(
-    onLoginSuccess: (Long) -> Unit,
-    onMoveToSignup: () -> Unit,
-    onStoreLoginClick: () -> Unit
+fun StoreLoginScreen(
+    onLoginSuccess: (Long, String) -> Unit,
+    onCustomerLoginClick: () -> Unit
 ) {
     val context = LocalContext.current
     val tokenManager = remember { TokenManager(context) }
@@ -44,7 +43,7 @@ fun LoginScreen(
         modifier = Modifier.padding(24.dp)
     ) {
         Text(
-            text = "로그인",
+            text = "매장 로그인",
             style = MaterialTheme.typography.headlineSmall
         )
 
@@ -76,8 +75,8 @@ fun LoginScreen(
                     message = ""
 
                     try {
-                        val response = ApiClient.authApi.login(
-                            LoginRequest(
+                        val response = ApiClient.storeAccountApi.login(
+                            StoreAccountLoginRequest(
                                 email = email,
                                 password = password
                             )
@@ -85,11 +84,13 @@ fun LoginScreen(
 
                         if (response.isSuccessful && response.body() != null) {
                             val loginResponse = response.body()!!
-                            tokenManager.saveAccessToken(loginResponse.accessToken)
-                            tokenManager.saveCustomerId(loginResponse.customerId)
-                            onLoginSuccess(loginResponse.customerId)
+                            tokenManager.saveStoreSession(
+                                token = loginResponse.token,
+                                storeId = loginResponse.storeId
+                            )
+                            onLoginSuccess(loginResponse.storeId, loginResponse.token)
                         } else {
-                            message = "로그인 실패: ${response.code()}"
+                            message = "매장 로그인 실패: ${response.code()}"
                         }
                     } catch (e: Exception) {
                         message = "서버 연결 실패: ${e.message}"
@@ -100,15 +101,11 @@ fun LoginScreen(
             },
             enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
         ) {
-            Text(if (isLoading) "로그인 중..." else "로그인")
+            Text(if (isLoading) "로그인 중..." else "매장 로그인")
         }
 
-        TextButton(onClick = onMoveToSignup) {
-            Text("계정이 없나요? 회원가입")
-        }
-
-        TextButton(onClick = onStoreLoginClick) {
-            Text("매장 계정으로 로그인")
+        TextButton(onClick = onCustomerLoginClick) {
+            Text("고객으로 로그인")
         }
 
         if (message.isNotBlank()) {

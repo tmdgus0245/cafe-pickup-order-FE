@@ -46,6 +46,11 @@ fun CartScreen(
     LaunchedEffect(isOrdering) {
         if (isOrdering) {
             try {
+                if (customerId <= 0L) {
+                    errorMessage = "로그인 정보가 없습니다. 다시 로그인해 주세요."
+                    return@LaunchedEffect
+                }
+
                 val request = OrderCreateRequest(
                     storeId = storeId,
                     requestedPickupTime = null,
@@ -84,10 +89,8 @@ fun CartScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(
-                onClick = onBackClick
-            ) {
-                Text("←")
+            TextButton(onClick = onBackClick) {
+                Text("뒤로")
             }
 
             Text(
@@ -116,7 +119,7 @@ fun CartScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "총 결제 금액 ${totalPrice}원",
+                text = "총 결제 금액 ${formatPrice(totalPrice)}",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -179,7 +182,7 @@ private fun CartItemCard(
             } else {
                 item.options.forEach { option ->
                     Text(
-                        text = "- ${option.name} +${option.additionalPrice}원",
+                        text = "- ${option.name} +${formatPrice(option.additionalPrice)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -217,11 +220,15 @@ private fun CartItemCard(
                 Spacer(modifier = Modifier.weight(1f))
 
                 Text(
-                    text = "${item.totalPrice}원",
+                    text = formatPrice(item.totalPrice),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
         }
     }
+}
+
+private fun formatPrice(value: Int): String {
+    return "%,d원".format(value)
 }

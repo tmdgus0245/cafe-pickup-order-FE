@@ -1,4 +1,4 @@
-package com.cafepickuporder.android.ui.order
+package com.cafepickuporder.android.ui.store
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,21 +33,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
-import com.cafepickuporder.android.data.request.OrderCancelRequest
-import com.cafepickuporder.android.data.response.OrderListResponse
+import com.cafepickuporder.android.data.request.OrderRejectRequest
+import com.cafepickuporder.android.data.response.StoreOrderResponse
 import kotlinx.coroutines.launch
 
 @Composable
-fun OrderListScreen(
-    customerId: Long,
-    onBackClick: () -> Unit
+fun StoreOrderManagementScreen(
+    storeId: Long,
+    accessToken: String,
+    onLogout: () -> Unit
 ) {
-    var orders by remember { mutableStateOf<List<OrderListResponse>>(emptyList()) }
+    var orders by remember { mutableStateOf<List<StoreOrderResponse>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var cancelingOrderId by remember { mutableStateOf<Long?>(null) }
+    var processingOrderId by remember { mutableStateOf<Long?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var cancelTarget by remember { mutableStateOf<OrderListResponse?>(null) }
+    var rejectTarget by remember { mutableStateOf<StoreOrderResponse?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val authorization = "Bearer $accessToken"
 
     fun loadOrders() {
         coroutineScope.launch {
@@ -54,7 +57,7 @@ fun OrderListScreen(
             errorMessage = null
 
             try {
-                orders = ApiClient.orderApi.getOrders(customerId)
+                orders = ApiClient.storeOrderApi.getStoreOrders(storeId, authorization)
             } catch (e: Exception) {
                 errorMessage = e.message
             } finally {
@@ -63,43 +66,53 @@ fun OrderListScreen(
         }
     }
 
-    LaunchedEffect(customerId) {
-        if (customerId > 0L) {
-            loadOrders()
-        } else {
-            isLoading = false
-            errorMessage = "로그인 정보가 없습니다. 다시 로그인해 주세요."
+    fun changeOrderStatus(
+        orderId: Long,
+        action: suspend () -> StoreOrderResponse
+    ) {
+        coroutineScope.launch {
+            processingOrderId = orderId
+            errorMessage = null
+
+            try {
+                action()
+                loadOrders()
+            } catch (e: Exception) {
+                errorMessage = e.message
+            } finally {
+                processingOrderId = null
+            }
         }
     }
 
-    cancelTarget?.let { order ->
-        CancelOrderDialog(
+    LaunchedEffect(storeId, accessToken) {
+        if (storeId > 0L && accessToken.isNotBlank()) {
+            loadOrders()
+        } else {
+            isLoading = false
+            errorMessage = "매장 로그인 정보가 없습니다."
+        }
+    }
+
+    rejectTarget?.let { order ->
+        RejectOrderDialog(
             orderNumber = order.orderNumber,
-            isCanceling = cancelingOrderId == order.orderId,
+            isProcessing = processingOrderId == order.orderId,
             onDismiss = {
-                if (cancelingOrderId == null) {
-                    cancelTarget = null
+                if (processingOrderId == null) {
+                    rejectTarget = null
                 }
             },
             onConfirm = { reason ->
-                coroutineScope.launch {
-                    cancelingOrderId = order.orderId
-                    errorMessage = null
-
-                    try {
-                        ApiClient.orderApi.cancelOrder(
-                            orderId = order.orderId,
-                            customerId = customerId,
-                            request = OrderCancelRequest(reason)
-                        )
-                        cancelTarget = null
-                        loadOrders()
-                    } catch (e: Exception) {
-                        errorMessage = e.message
-                    } finally {
-                        cancelingOrderId = null
-                    }
+                changeOrderStatus(order.orderId) {
+                    ApiClient.storeOrderApi.rejectOrder(
+                        storeId = storeId,
+                        orderId = order.orderId,
+                        authorization = authorization,
+                        request = OrderRejectRequest(reason)
+                    )
                 }
+                rejectTarget = null
             }
         )
     }
@@ -113,23 +126,25 @@ fun OrderListScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBackClick) {
-                Text("뒤로")
-            }
-
-            Column {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
                 Text(
-                    text = "주문 내역",
+                    text = "매장 주문 관리",
                     style = MaterialTheme.typography.headlineSmall
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "최근 주문 상태와 픽업 시간을 확인하세요.",
+                    text = "접수부터 픽업 완료까지 주문 상태를 처리하세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            TextButton(onClick = onLogout) {
+                Text("로그아웃")
             }
         }
 
@@ -142,16 +157,13 @@ fun OrderListScreen(
 
             errorMessage != null -> {
                 Text(
-                    text = "주문 내역을 불러오지 못했습니다.\n$errorMessage",
+                    text = "매장 주문을 불러오지 못했습니다.\n$errorMessage",
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
             orders.isEmpty() -> {
-                Text(
-                    text = "아직 주문 내역이 없습니다.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text("처리할 주문이 없습니다.")
             }
 
             else -> {
@@ -159,10 +171,27 @@ fun OrderListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(orders) { order ->
-                        OrderCard(
+                        StoreOrderCard(
                             order = order,
-                            isCanceling = cancelingOrderId == order.orderId,
-                            onCancelClick = { cancelTarget = order }
+                            isProcessing = processingOrderId == order.orderId,
+                            onAccept = {
+                                changeOrderStatus(order.orderId) {
+                                    ApiClient.storeOrderApi.acceptOrder(storeId, order.orderId, authorization)
+                                }
+                            },
+                            onReady = {
+                                changeOrderStatus(order.orderId) {
+                                    ApiClient.storeOrderApi.markReady(storeId, order.orderId, authorization)
+                                }
+                            },
+                            onComplete = {
+                                changeOrderStatus(order.orderId) {
+                                    ApiClient.storeOrderApi.completeOrder(storeId, order.orderId, authorization)
+                                }
+                            },
+                            onReject = {
+                                rejectTarget = order
+                            }
                         )
                     }
                 }
@@ -172,10 +201,13 @@ fun OrderListScreen(
 }
 
 @Composable
-private fun OrderCard(
-    order: OrderListResponse,
-    isCanceling: Boolean,
-    onCancelClick: () -> Unit
+private fun StoreOrderCard(
+    order: StoreOrderResponse,
+    isProcessing: Boolean,
+    onAccept: () -> Unit,
+    onReady: () -> Unit,
+    onComplete: () -> Unit,
+    onReject: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -192,7 +224,7 @@ private fun OrderCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = order.storeName,
+                        text = order.customerName,
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -205,7 +237,7 @@ private fun OrderCard(
                     )
                 }
 
-                OrderStatusBadge(status = order.status)
+                StoreOrderStatusBadge(status = order.status)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -226,7 +258,6 @@ private fun OrderCard(
 
             if (!order.estimatedPickupTime.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
                     text = "예상 픽업 시간 ${formatDateTime(order.estimatedPickupTime)}",
                     style = MaterialTheme.typography.bodySmall,
@@ -234,15 +265,50 @@ private fun OrderCard(
                 )
             }
 
-            if (order.status == "REQUESTED") {
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = onCancelClick,
-                    enabled = !isCanceling,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (isCanceling) "취소 처리 중..." else "주문 취소")
+            when (order.status) {
+                "REQUESTED" -> {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = onAccept,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (isProcessing) "처리 중..." else "수락")
+                        }
+
+                        OutlinedButton(
+                            onClick = onReject,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("거절")
+                        }
+                    }
+                }
+
+                "ACCEPTED" -> {
+                    Button(
+                        onClick = onReady,
+                        enabled = !isProcessing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isProcessing) "처리 중..." else "준비 완료")
+                    }
+                }
+
+                "READY" -> {
+                    Button(
+                        onClick = onComplete,
+                        enabled = !isProcessing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isProcessing) "처리 중..." else "픽업 완료")
+                    }
                 }
             }
         }
@@ -250,18 +316,18 @@ private fun OrderCard(
 }
 
 @Composable
-private fun CancelOrderDialog(
+private fun RejectOrderDialog(
     orderNumber: String,
-    isCanceling: Boolean,
+    isProcessing: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    var reason by remember { mutableStateOf("고객 요청") }
+    var reason by remember { mutableStateOf("매장 사정") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("주문을 취소할까요?")
+            Text("주문을 거절할까요?")
         },
         text = {
             Column {
@@ -272,7 +338,7 @@ private fun CancelOrderDialog(
                 OutlinedTextField(
                     value = reason,
                     onValueChange = { reason = it },
-                    label = { Text("취소 사유") },
+                    label = { Text("거절 사유") },
                     singleLine = true
                 )
             }
@@ -280,17 +346,17 @@ private fun CancelOrderDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onConfirm(reason.ifBlank { "고객 요청" })
+                    onConfirm(reason.ifBlank { "매장 사정" })
                 },
-                enabled = !isCanceling
+                enabled = !isProcessing
             ) {
-                Text(if (isCanceling) "처리 중..." else "취소하기")
+                Text(if (isProcessing) "처리 중..." else "거절하기")
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                enabled = !isCanceling
+                enabled = !isProcessing
             ) {
                 Text("닫기")
             }
@@ -299,9 +365,7 @@ private fun CancelOrderDialog(
 }
 
 @Composable
-private fun OrderStatusBadge(
-    status: String
-) {
+private fun StoreOrderStatusBadge(status: String) {
     Surface(
         shape = RoundedCornerShape(50),
         color = when (status) {
@@ -314,10 +378,7 @@ private fun OrderStatusBadge(
     ) {
         Text(
             text = displayOrderStatus(status),
-            modifier = Modifier.padding(
-                horizontal = 12.dp,
-                vertical = 6.dp
-            ),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelMedium,
             color = when (status) {
                 "REJECTED", "CANCELED" -> MaterialTheme.colorScheme.onErrorContainer
