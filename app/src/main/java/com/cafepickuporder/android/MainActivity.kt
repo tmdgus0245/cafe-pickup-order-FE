@@ -4,17 +4,22 @@ import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.cafepickuporder.android.ui.common.MainTab
+import com.cafepickuporder.android.ui.common.PassOrderBottomBar
+import com.cafepickuporder.android.ui.favorites.FavoritesScreen
 import com.cafepickuporder.android.ui.login.LoginScreen
 import com.cafepickuporder.android.ui.mypage.MyPageScreen
 import com.cafepickuporder.android.ui.signup.SignupScreen
 import com.cafepickuporder.android.ui.store.MenuDetailScreen
 import com.cafepickuporder.android.ui.store.MenuListScreen
-import com.cafepickuporder.android.ui.store.StoreLoginScreen
 import com.cafepickuporder.android.ui.store.StoreListScreen
 import com.cafepickuporder.android.ui.store.StoreOrderManagementScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
@@ -37,11 +42,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App() {
     var screen by remember { mutableStateOf("login") }
+    var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var selectedStoreId by remember { mutableStateOf<Long?>(null) }
     var selectedMenuId by remember { mutableStateOf<Long?>(null) }
     var customerId by remember { mutableStateOf<Long?>(null) }
-    var managerStoreId by remember { mutableStateOf<Long?>(null) }
-    var managerAccessToken by remember { mutableStateOf<String?>(null) }
+    var ownerStoreId by remember { mutableStateOf<Long?>(null) }
+    var ownerAccessToken by remember { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = screen != "login") {
         when (screen) {
@@ -49,24 +55,21 @@ fun App() {
                 screen = "login"
             }
 
-            "storeLogin" -> {
+            "main" -> {
+                if (selectedTab == MainTab.Home) {
+                    screen = "login"
+                } else {
+                    selectedTab = MainTab.Home
+                }
+            }
+
+            "ownerOrders" -> {
                 screen = "login"
             }
 
-            "storeOrders" -> {
-                screen = "storeLogin"
-            }
-
-            "mypage" -> {
-                screen = "store"
-            }
-
-            "store" -> {
-                screen = "mypage"
-            }
-
             "menuList" -> {
-                screen = "store"
+                screen = "main"
+                selectedTab = MainTab.Home
             }
 
             "menuDetail" -> {
@@ -78,7 +81,8 @@ fun App() {
             }
 
             "orderList" -> {
-                screen = "store"
+                screen = "main"
+                selectedTab = MainTab.Home
             }
 
             else -> {
@@ -91,30 +95,24 @@ fun App() {
         "login" -> LoginScreen(
             onLoginSuccess = { loggedInCustomerId ->
                 customerId = loggedInCustomerId
-                screen = "store"
+                selectedTab = MainTab.Home
+                screen = "main"
             },
-            onMoveToSignup = { screen = "signup" },
-            onStoreLoginClick = { screen = "storeLogin" }
+            onOwnerLoginSuccess = { storeId, accessToken ->
+                ownerStoreId = storeId
+                ownerAccessToken = accessToken
+                screen = "ownerOrders"
+            },
+            onMoveToSignup = { screen = "signup" }
         )
 
-        "storeLogin" -> StoreLoginScreen(
-            onLoginSuccess = { storeId, accessToken ->
-                managerStoreId = storeId
-                managerAccessToken = accessToken
-                screen = "storeOrders"
-            },
-            onCustomerLoginClick = {
-                screen = "login"
-            }
-        )
-
-        "storeOrders" -> StoreOrderManagementScreen(
-            storeId = managerStoreId ?: 0L,
-            accessToken = managerAccessToken.orEmpty(),
+        "ownerOrders" -> StoreOrderManagementScreen(
+            storeId = ownerStoreId ?: 0L,
+            accessToken = ownerAccessToken.orEmpty(),
             onLogout = {
-                managerStoreId = null
-                managerAccessToken = null
-                screen = "storeLogin"
+                ownerStoreId = null
+                ownerAccessToken = null
+                screen = "login"
             }
         )
 
@@ -122,30 +120,25 @@ fun App() {
             onMoveToLogin = { screen = "login" }
         )
 
-        "mypage" -> MyPageScreen(
+        "main" -> MainTabs(
+            selectedTab = selectedTab,
+            customerId = customerId ?: 0L,
+            onTabSelected = { selectedTab = it },
+            onStoreClick = { storeId ->
+                selectedStoreId = storeId
+                screen = "menuList"
+            },
             onLogout = {
                 customerId = null
                 screen = "login"
             }
         )
 
-        "store" -> StoreListScreen(
-            onMyPageClick = {
-                screen = "mypage"
-            },
-            onOrderListClick = {
-                screen = "orderList"
-            },
-            onStoreClick = { storeId ->
-                selectedStoreId = storeId
-                screen = "menuList"
-            }
-        )
-
         "menuList" -> MenuListScreen(
             storeId = selectedStoreId ?: 0L,
             onBackClick = {
-                screen = "store"
+                screen = "main"
+                selectedTab = MainTab.Home
             },
             onCartClick = {
                 screen = "cart"
@@ -181,15 +174,57 @@ fun App() {
 
         "orderComplete" -> OrderCompleteScreen(
             onGoStoreClick = {
-                screen = "store"
+                selectedTab = MainTab.Home
+                screen = "main"
             }
         )
 
         "orderList" -> OrderListScreen(
             customerId = customerId ?: 0L,
             onBackClick = {
-                screen = "store"
+                screen = "main"
+                selectedTab = MainTab.Home
             }
         )
+    }
+}
+
+@Composable
+private fun MainTabs(
+    selectedTab: MainTab,
+    customerId: Long,
+    onTabSelected: (MainTab) -> Unit,
+    onStoreClick: (Long) -> Unit,
+    onLogout: () -> Unit
+) {
+    Scaffold(
+        bottomBar = {
+            PassOrderBottomBar(
+                selectedTab = selectedTab,
+                onTabSelected = onTabSelected
+            )
+        }
+    ) { innerPadding ->
+        when (selectedTab) {
+            MainTab.Home -> StoreListScreen(
+                modifier = Modifier.padding(innerPadding),
+                onStoreClick = onStoreClick
+            )
+
+            MainTab.Orders -> OrderListScreen(
+                modifier = Modifier.padding(innerPadding),
+                customerId = customerId,
+                onBackClick = { onTabSelected(MainTab.Home) }
+            )
+
+            MainTab.Favorites -> FavoritesScreen(
+                modifier = Modifier.padding(innerPadding)
+            )
+
+            MainTab.MyPage -> MyPageScreen(
+                modifier = Modifier.padding(innerPadding),
+                onLogout = onLogout
+            )
+        }
     }
 }

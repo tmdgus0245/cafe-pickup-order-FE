@@ -1,5 +1,6 @@
 package com.cafepickuporder.android.ui.store
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,10 +32,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.request.OrderRejectRequest
 import com.cafepickuporder.android.data.response.StoreOrderResponse
+import com.cafepickuporder.android.ui.theme.Ink
+import com.cafepickuporder.android.ui.theme.Muted
+import com.cafepickuporder.android.ui.theme.PageGray
+import com.cafepickuporder.android.ui.theme.PassOrange
 import kotlinx.coroutines.launch
 
 @Composable
@@ -120,6 +127,7 @@ fun StoreOrderManagementScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.White)
             .padding(20.dp)
     ) {
         Row(
@@ -131,7 +139,9 @@ fun StoreOrderManagementScreen(
             ) {
                 Text(
                     text = "매장 주문 관리",
-                    style = MaterialTheme.typography.headlineSmall
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Ink,
+                    fontWeight = FontWeight.ExtraBold
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -139,7 +149,7 @@ fun StoreOrderManagementScreen(
                 Text(
                     text = "접수부터 픽업 완료까지 주문 상태를 처리하세요.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Muted
                 )
             }
 
@@ -152,7 +162,7 @@ fun StoreOrderManagementScreen(
 
         when {
             isLoading -> {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = PassOrange)
             }
 
             errorMessage != null -> {
@@ -163,7 +173,10 @@ fun StoreOrderManagementScreen(
             }
 
             orders.isEmpty() -> {
-                Text("처리할 주문이 없습니다.")
+                Text(
+                    text = "처리할 주문이 없습니다.",
+                    color = Muted
+                )
             }
 
             else -> {
@@ -211,7 +224,9 @@ private fun StoreOrderCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(18.dp)
@@ -225,7 +240,9 @@ private fun StoreOrderCard(
                 ) {
                     Text(
                         text = order.customerName,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Ink,
+                        fontWeight = FontWeight.Bold
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -233,7 +250,7 @@ private fun StoreOrderCard(
                     Text(
                         text = "주문번호 ${order.orderNumber}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Muted
                     )
                 }
 
@@ -245,7 +262,8 @@ private fun StoreOrderCard(
             Text(
                 text = "결제 금액 ${formatPrice(order.totalPrice)}",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
+                color = Ink,
+                fontWeight = FontWeight.Bold
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -253,7 +271,7 @@ private fun StoreOrderCard(
             Text(
                 text = "주문 시간 ${formatDateTime(order.createdAt)}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Muted
             )
 
             if (!order.estimatedPickupTime.isNullOrBlank()) {
@@ -261,7 +279,7 @@ private fun StoreOrderCard(
                 Text(
                     text = "예상 픽업 시간 ${formatDateTime(order.estimatedPickupTime)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Muted
                 )
             }
 
@@ -369,11 +387,11 @@ private fun StoreOrderStatusBadge(status: String) {
     Surface(
         shape = RoundedCornerShape(50),
         color = when (status) {
-            "REQUESTED" -> MaterialTheme.colorScheme.secondaryContainer
+            "REQUESTED" -> PageGray
             "ACCEPTED", "READY" -> MaterialTheme.colorScheme.primaryContainer
-            "COMPLETED" -> MaterialTheme.colorScheme.tertiaryContainer
+            "COMPLETED" -> PageGray
             "REJECTED", "CANCELED" -> MaterialTheme.colorScheme.errorContainer
-            else -> MaterialTheme.colorScheme.surfaceVariant
+            else -> PageGray
         }
     ) {
         Text(
@@ -382,8 +400,10 @@ private fun StoreOrderStatusBadge(status: String) {
             style = MaterialTheme.typography.labelMedium,
             color = when (status) {
                 "REJECTED", "CANCELED" -> MaterialTheme.colorScheme.onErrorContainer
-                else -> MaterialTheme.colorScheme.onSurface
-            }
+                "ACCEPTED", "READY" -> PassOrange
+                else -> Ink
+            },
+            fontWeight = FontWeight.Bold
         )
     }
 }

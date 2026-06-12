@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun OrderListScreen(
+    modifier: Modifier = Modifier,
     customerId: Long,
     onBackClick: () -> Unit
 ) {
@@ -105,7 +106,7 @@ fun OrderListScreen(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(20.dp)
     ) {
