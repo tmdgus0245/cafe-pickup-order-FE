@@ -46,4 +46,8 @@ object ApiClient {
     val storeAccountApi: StoreAccountApi by lazy {
         retrofit.create(StoreAccountApi::class.java)
     }
+
+    val storeMenuManageApi: StoreMenuManageApi by lazy {
+        retrofit.create(StoreMenuManageApi::class.java)
+    }
 }

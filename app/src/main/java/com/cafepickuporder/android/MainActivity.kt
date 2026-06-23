@@ -1,6 +1,8 @@
 package com.cafepickuporder.android
 
+import android.app.Activity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.cafepickuporder.android.ui.common.MainTab
 import com.cafepickuporder.android.ui.common.PassOrderBottomBar
 import com.cafepickuporder.android.ui.favorites.FavoritesScreen
@@ -21,7 +24,7 @@ import com.cafepickuporder.android.ui.signup.SignupScreen
 import com.cafepickuporder.android.ui.store.MenuDetailScreen
 import com.cafepickuporder.android.ui.store.MenuListScreen
 import com.cafepickuporder.android.ui.store.StoreListScreen
-import com.cafepickuporder.android.ui.store.StoreOrderManagementScreen
+import com.cafepickuporder.android.ui.store.StoreOwnerScreen
 import com.cafepickuporder.android.ui.theme.CafePickupOrderTheme
 import com.cafepickuporder.android.ui.cart.CartScreen
 import com.cafepickuporder.android.ui.order.OrderCompleteScreen
@@ -41,6 +44,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun App() {
+    val context = LocalContext.current
+    val activity = context as? Activity
     var screen by remember { mutableStateOf("login") }
     var selectedTab by remember { mutableStateOf(MainTab.Home) }
     var selectedStoreId by remember { mutableStateOf<Long?>(null) }
@@ -48,6 +53,21 @@ fun App() {
     var customerId by remember { mutableStateOf<Long?>(null) }
     var ownerStoreId by remember { mutableStateOf<Long?>(null) }
     var ownerAccessToken by remember { mutableStateOf<String?>(null) }
+    var lastBackPressedAt by remember { mutableStateOf(0L) }
+
+    fun requestAppExit() {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressedAt <= 2000L) {
+            activity?.finish()
+        } else {
+            lastBackPressedAt = now
+            Toast.makeText(
+                context,
+                "한 번 더 누르면 앱이 종료됩니다.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     BackHandler(enabled = screen != "login") {
         when (screen) {
@@ -56,15 +76,11 @@ fun App() {
             }
 
             "main" -> {
-                if (selectedTab == MainTab.Home) {
-                    screen = "login"
-                } else {
-                    selectedTab = MainTab.Home
-                }
+                requestAppExit()
             }
 
             "ownerOrders" -> {
-                screen = "login"
+                requestAppExit()
             }
 
             "menuList" -> {
@@ -106,7 +122,7 @@ fun App() {
             onMoveToSignup = { screen = "signup" }
         )
 
-        "ownerOrders" -> StoreOrderManagementScreen(
+        "ownerOrders" -> StoreOwnerScreen(
             storeId = ownerStoreId ?: 0L,
             accessToken = ownerAccessToken.orEmpty(),
             onLogout = {

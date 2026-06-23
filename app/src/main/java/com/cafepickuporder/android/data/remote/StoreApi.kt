@@ -1,6 +1,7 @@
 package com.cafepickuporder.android.data.remote
 
 import com.cafepickuporder.android.data.response.MenuDetailResponse
+import com.cafepickuporder.android.data.response.MenuCategoryResponse
 import com.cafepickuporder.android.data.response.MenuResponse
 import com.cafepickuporder.android.data.response.StoreListResponse
 import retrofit2.http.GET
@@ -15,6 +16,11 @@ interface StoreApi {
     suspend fun getMenus(
         @Path("storeId") storeId: Long
     ): List<MenuResponse>
+
+    @GET("/api/stores/{storeId}/categories")
+    suspend fun getCategories(
+        @Path("storeId") storeId: Long
+    ): List<MenuCategoryResponse>
 
     @GET("/api/stores/{storeId}/menus/{menuId}")
     suspend fun getMenuDetail(

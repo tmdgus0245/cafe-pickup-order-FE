@@ -2,7 +2,6 @@ package com.cafepickuporder.android.ui.store
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -29,9 +29,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
+import com.cafepickuporder.android.data.response.MenuCategoryResponse
 import com.cafepickuporder.android.data.response.MenuResponse
 import com.cafepickuporder.android.ui.cart.CartManager
 import com.cafepickuporder.android.ui.theme.Ink
@@ -48,6 +49,7 @@ import com.cafepickuporder.android.ui.theme.Muted
 import com.cafepickuporder.android.ui.theme.PageGray
 import com.cafepickuporder.android.ui.theme.PassOrange
 import com.cafepickuporder.android.ui.theme.SoftOrange
+import kotlinx.coroutines.launch
 
 @Composable
 fun MenuListScreen(
@@ -56,14 +58,25 @@ fun MenuListScreen(
     onCartClick: () -> Unit,
     onMenuClick: (storeId: Long, menuId: Long) -> Unit
 ) {
+    var categories by remember { mutableStateOf<List<MenuCategoryResponse>>(emptyList()) }
     var menus by remember { mutableStateOf<List<MenuResponse>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var selectedCategoryId by remember { mutableLongStateOf(-1L) }
+    var selectedCategoryId by remember { mutableStateOf<Long?>(null) }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(storeId) {
+        isLoading = true
+        errorMessage = null
+
         try {
             menus = ApiClient.storeApi.getMenus(storeId)
+            categories = try {
+                ApiClient.storeApi.getCategories(storeId)
+            } catch (_: Exception) {
+                emptyList()
+            }
         } catch (e: Exception) {
             errorMessage = e.message
         } finally {
@@ -71,11 +84,51 @@ fun MenuListScreen(
         }
     }
 
-    val categories = menus.map { it.categoryId }.distinct()
-    val filteredMenus = if (selectedCategoryId == -1L) {
-        menus
-    } else {
-        menus.filter { it.categoryId == selectedCategoryId }
+    val orderedCategories = remember(categories, menus) {
+        val categoryIds = categories.map { it.categoryId }.toSet()
+        val fallbackCategories = menus
+            .map { it.categoryId }
+            .distinct()
+            .filterNot { it in categoryIds }
+            .mapIndexed { index, categoryId ->
+                MenuCategoryResponse(
+                    categoryId = categoryId,
+                    name = "카테고리 ${categories.size + index + 1}",
+                    displayOrder = categories.size + index
+                )
+            }
+
+        (categories + fallbackCategories).sortedBy { it.displayOrder ?: Int.MAX_VALUE }
+    }
+    val menuSections = remember(orderedCategories, menus) {
+        orderedCategories.mapNotNull { category ->
+            val sectionMenus = menus
+                .filter { it.categoryId == category.categoryId }
+                .sortedBy { it.displayOrder ?: Int.MAX_VALUE }
+
+            if (sectionMenus.isEmpty()) null else MenuSection(category, sectionMenus)
+        }
+    }
+    val sectionStartIndexes = remember(menuSections) {
+        buildSectionStartIndexes(menuSections)
+    }
+
+    LaunchedEffect(menuSections) {
+        if (selectedCategoryId == null) {
+            selectedCategoryId = menuSections.firstOrNull()?.category?.categoryId
+        }
+    }
+
+    LaunchedEffect(listState.firstVisibleItemIndex, menuSections) {
+        val visibleCategoryId = findVisibleCategoryId(
+            firstVisibleItemIndex = listState.firstVisibleItemIndex,
+            sections = menuSections,
+            sectionStartIndexes = sectionStartIndexes
+        )
+
+        if (visibleCategoryId != null && visibleCategoryId != selectedCategoryId) {
+            selectedCategoryId = visibleCategoryId
+        }
     }
 
     Column(
@@ -90,39 +143,45 @@ fun MenuListScreen(
             onCartClick = onCartClick
         )
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            item {
-                NoticeBox()
-            }
+        NoticeBox()
 
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                ) {
-                    Text(
-                        text = "메뉴 리스트",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Ink,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+        Spacer(modifier = Modifier.height(18.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                text = "메뉴 리스트",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ink,
+                fontWeight = FontWeight.ExtraBold
+            )
 
-                    SearchPlaceholder()
+            Spacer(modifier = Modifier.height(16.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+            SearchPlaceholder()
 
-                    CategoryTabs(
-                        categories = categories,
-                        selectedCategoryId = selectedCategoryId,
-                        onCategorySelected = { selectedCategoryId = it }
-                    )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CategoryTabs(
+                categories = menuSections.map { it.category },
+                selectedCategoryId = selectedCategoryId,
+                onCategorySelected = { categoryId ->
+                    selectedCategoryId = categoryId
+                    sectionStartIndexes[categoryId]?.let { targetIndex ->
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(targetIndex)
+                        }
+                    }
                 }
-            }
+            )
+        }
 
+        Spacer(modifier = Modifier.height(14.dp))
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             when {
                 isLoading -> {
                     item {
@@ -147,7 +206,7 @@ fun MenuListScreen(
                     }
                 }
 
-                filteredMenus.isEmpty() -> {
+                menuSections.isEmpty() -> {
                     item {
                         Text(
                             text = "등록된 메뉴가 없습니다.",
@@ -158,11 +217,17 @@ fun MenuListScreen(
                 }
 
                 else -> {
-                    items(filteredMenus) { menu ->
-                        MenuCard(
-                            menu = menu,
-                            onClick = { onMenuClick(storeId, menu.menuId) }
-                        )
+                    menuSections.forEach { section ->
+                        item(key = "category-${section.category.categoryId}") {
+                            CategorySectionTitle(title = section.category.name)
+                        }
+
+                        items(section.menus, key = { it.menuId }) { menu ->
+                            MenuCard(
+                                menu = menu,
+                                onClick = { onMenuClick(storeId, menu.menuId) }
+                            )
+                        }
                     }
                 }
             }
@@ -264,25 +329,28 @@ private fun SearchPlaceholder() {
 
 @Composable
 private fun CategoryTabs(
-    categories: List<Long>,
-    selectedCategoryId: Long,
+    categories: List<MenuCategoryResponse>,
+    selectedCategoryId: Long?,
     onCategorySelected: (Long) -> Unit
 ) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    val categoryListState = rememberLazyListState()
+
+    LaunchedEffect(selectedCategoryId, categories) {
+        val selectedIndex = categories.indexOfFirst { it.categoryId == selectedCategoryId }
+        if (selectedIndex >= 0) {
+            categoryListState.animateScrollToItem(selectedIndex)
+        }
+    }
+
+    LazyRow(
+        state = categoryListState,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        CategoryChip(
-            label = "전체",
-            selected = selectedCategoryId == -1L,
-            onClick = { onCategorySelected(-1L) }
-        )
-
-        categories.forEachIndexed { index, categoryId ->
+        itemsIndexed(categories, key = { _, category -> category.categoryId }) { _, category ->
             CategoryChip(
-                label = "카테고리 ${index + 1}",
-                selected = selectedCategoryId == categoryId,
-                onClick = { onCategorySelected(categoryId) }
+                label = category.name,
+                selected = selectedCategoryId == category.categoryId,
+                onClick = { onCategorySelected(category.categoryId) }
             )
         }
     }
@@ -308,6 +376,17 @@ private fun CategoryChip(
             fontWeight = FontWeight.Bold
         )
     }
+}
+
+@Composable
+private fun CategorySectionTitle(title: String) {
+    Text(
+        text = title,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
+        style = MaterialTheme.typography.titleLarge,
+        color = Ink,
+        fontWeight = FontWeight.ExtraBold
+    )
 }
 
 @Composable
@@ -377,6 +456,35 @@ private fun MenuCard(
             .padding(horizontal = 20.dp)
             .background(LineGray)
     )
+}
+
+private data class MenuSection(
+    val category: MenuCategoryResponse,
+    val menus: List<MenuResponse>
+)
+
+private fun buildSectionStartIndexes(sections: List<MenuSection>): Map<Long, Int> {
+    var index = 0
+    return sections.associate { section ->
+        val startIndex = index
+        index += 1 + section.menus.size
+        section.category.categoryId to startIndex
+    }
+}
+
+private fun findVisibleCategoryId(
+    firstVisibleItemIndex: Int,
+    sections: List<MenuSection>,
+    sectionStartIndexes: Map<Long, Int>
+): Long? {
+    return sections
+        .mapNotNull { section ->
+            sectionStartIndexes[section.category.categoryId]?.let { startIndex ->
+                section.category.categoryId to startIndex
+            }
+        }
+        .lastOrNull { (_, startIndex) -> startIndex <= firstVisibleItemIndex }
+        ?.first
 }
 
 private fun displayMenuStatus(status: String): String {

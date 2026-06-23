@@ -143,14 +143,6 @@ fun StoreOrderManagementScreen(
                     color = Ink,
                     fontWeight = FontWeight.ExtraBold
                 )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "접수부터 픽업 완료까지 주문 상태를 처리하세요.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Muted
-                )
             }
 
             TextButton(onClick = onLogout) {
