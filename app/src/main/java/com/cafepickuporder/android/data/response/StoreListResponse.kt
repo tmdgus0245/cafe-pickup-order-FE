@@ -6,6 +6,7 @@ data class StoreListResponse(
         val description: String?,
         val address: String?,
         val status: String,
-        val orderType: String,
+        val appOrderAvailable: Boolean,
+        val dineInAvailable: Boolean,
         val averagePreparationMinutes: Int?
 )

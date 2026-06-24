@@ -153,18 +153,6 @@ private fun DetailTopBar(
             fontWeight = FontWeight.ExtraBold,
             modifier = Modifier.weight(1f)
         )
-
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = PageGray
-        ) {
-            Text(
-                text = "같이주문",
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                color = Muted,
-                style = MaterialTheme.typography.labelLarge
-            )
-        }
     }
 }
 
@@ -219,38 +207,40 @@ private fun MenuDetailContent(
             }
         }
 
-        Button(
-            onClick = {
-                val cartOptions = selectedOptions.map { entry ->
-                    val optionGroupId = entry.key
-                    val option = entry.value
+        if (menu.status == "ON_SALE") {
+            Button(
+                onClick = {
+                    val cartOptions = selectedOptions.map { entry ->
+                        val optionGroupId = entry.key
+                        val option = entry.value
 
-                    CartOption(
-                        optionGroupId = optionGroupId,
-                        optionId = option.optionId,
-                        name = option.name,
-                        additionalPrice = option.additionalPrice
+                        CartOption(
+                            optionGroupId = optionGroupId,
+                            optionId = option.optionId,
+                            name = option.name,
+                            additionalPrice = option.additionalPrice
+                        )
+                    }
+
+                    val cartItem = CartItem(
+                        storeId = menu.storeId,
+                        menuId = menu.menuId,
+                        menuName = menu.name,
+                        basePrice = menu.price,
+                        options = cartOptions,
+                        quantity = quantity
                     )
-                }
 
-                val cartItem = CartItem(
-                    storeId = menu.storeId,
-                    menuId = menu.menuId,
-                    menuName = menu.name,
-                    basePrice = menu.price,
-                    options = cartOptions,
-                    quantity = quantity
-                )
-
-                CartManager.addItem(cartItem)
-                onAddedToCart()
-            },
-            enabled = requiredSatisfied,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            Text("${formatPrice(totalPrice)} 담기")
+                    CartManager.addItem(cartItem)
+                    onAddedToCart()
+                },
+                enabled = requiredSatisfied,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Text("${formatPrice(totalPrice)} 담기")
+            }
         }
     }
 }

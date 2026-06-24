@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -39,10 +40,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.response.MenuCategoryResponse
 import com.cafepickuporder.android.data.response.MenuResponse
 import com.cafepickuporder.android.ui.cart.CartManager
+import com.cafepickuporder.android.ui.favorites.FavoriteStoreManager
+import com.cafepickuporder.android.local.TokenManager
 import com.cafepickuporder.android.ui.theme.Ink
 import com.cafepickuporder.android.ui.theme.LineGray
 import com.cafepickuporder.android.ui.theme.Muted
@@ -58,8 +62,11 @@ fun MenuListScreen(
     onCartClick: () -> Unit,
     onMenuClick: (storeId: Long, menuId: Long) -> Unit
 ) {
+    val context = LocalContext.current
+    val tokenManager = remember { TokenManager(context) }
     var categories by remember { mutableStateOf<List<MenuCategoryResponse>>(emptyList()) }
     var menus by remember { mutableStateOf<List<MenuResponse>>(emptyList()) }
+    var storeName by remember { mutableStateOf("매장") }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedCategoryId by remember { mutableStateOf<Long?>(null) }
@@ -71,6 +78,12 @@ fun MenuListScreen(
         errorMessage = null
 
         try {
+            runCatching {
+                FavoriteStoreManager.refresh(tokenManager.getAccessToken().orEmpty())
+            }
+            storeName = runCatching {
+                ApiClient.storeApi.getStoreDetail(storeId).name
+            }.getOrDefault("매장")
             menus = ApiClient.storeApi.getMenus(storeId)
             categories = try {
                 ApiClient.storeApi.getCategories(storeId)
@@ -137,10 +150,19 @@ fun MenuListScreen(
             .background(Color.White)
     ) {
         MenuTopBar(
-            title = "메뉴 선택",
-            cartCount = CartManager.cartItems.sumOf { it.quantity },
+            title = storeName,
+            isFavorite = FavoriteStoreManager.contains(storeId),
             onBackClick = onBackClick,
-            onCartClick = onCartClick
+            onFavoriteClick = {
+                coroutineScope.launch {
+                    runCatching {
+                        FavoriteStoreManager.toggle(
+                            accessToken = tokenManager.getAccessToken().orEmpty(),
+                            storeId = storeId
+                        )
+                    }
+                }
+            }
         )
 
         NoticeBox()
@@ -154,10 +176,6 @@ fun MenuListScreen(
                 color = Ink,
                 fontWeight = FontWeight.ExtraBold
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            SearchPlaceholder()
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -249,18 +267,24 @@ fun MenuListScreen(
 @Composable
 private fun MenuTopBar(
     title: String,
-    cartCount: Int,
+    isFavorite: Boolean,
     onBackClick: () -> Unit,
-    onCartClick: () -> Unit
+    onFavoriteClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .statusBarsPadding()
+            .padding(start = 4.dp, top = 8.dp, end = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TextButton(onClick = onBackClick) {
-            Text("닫기", color = Ink)
+            Text(
+                text = "<",
+                color = Ink,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         Text(
@@ -271,10 +295,11 @@ private fun MenuTopBar(
             modifier = Modifier.weight(1f)
         )
 
-        TextButton(onClick = onCartClick) {
+        TextButton(onClick = onFavoriteClick) {
             Text(
-                text = if (cartCount > 0) "장바구니 $cartCount" else "장바구니",
+                text = if (isFavorite) "★" else "☆",
                 color = PassOrange,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
         }

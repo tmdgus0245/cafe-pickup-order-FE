@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.cafepickuporder.android.ui.common.MainTab
 import com.cafepickuporder.android.ui.common.PassOrderBottomBar
 import com.cafepickuporder.android.ui.favorites.FavoritesScreen
+import com.cafepickuporder.android.ui.favorites.FavoriteStoreManager
 import com.cafepickuporder.android.ui.login.LoginScreen
 import com.cafepickuporder.android.ui.mypage.MyPageScreen
 import com.cafepickuporder.android.ui.signup.SignupScreen
@@ -144,8 +145,14 @@ fun App() {
                 selectedStoreId = storeId
                 screen = "menuList"
             },
+            onMenuClick = { storeId, menuId ->
+                selectedStoreId = storeId
+                selectedMenuId = menuId
+                screen = "menuDetail"
+            },
             onLogout = {
                 customerId = null
+                FavoriteStoreManager.clear()
                 screen = "login"
             }
         )
@@ -211,6 +218,7 @@ private fun MainTabs(
     customerId: Long,
     onTabSelected: (MainTab) -> Unit,
     onStoreClick: (Long) -> Unit,
+    onMenuClick: (Long, Long) -> Unit,
     onLogout: () -> Unit
 ) {
     Scaffold(
@@ -224,7 +232,8 @@ private fun MainTabs(
         when (selectedTab) {
             MainTab.Home -> StoreListScreen(
                 modifier = Modifier.padding(innerPadding),
-                onStoreClick = onStoreClick
+                onStoreClick = onStoreClick,
+                onMenuClick = onMenuClick
             )
 
             MainTab.Orders -> OrderListScreen(
@@ -234,7 +243,8 @@ private fun MainTabs(
             )
 
             MainTab.Favorites -> FavoritesScreen(
-                modifier = Modifier.padding(innerPadding)
+                modifier = Modifier.padding(innerPadding),
+                onStoreClick = onStoreClick
             )
 
             MainTab.MyPage -> MyPageScreen(
