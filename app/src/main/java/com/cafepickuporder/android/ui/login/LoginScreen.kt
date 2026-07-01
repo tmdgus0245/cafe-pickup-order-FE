@@ -140,6 +140,7 @@ fun LoginScreen(
                                 val loginResponse = response.body()!!
                                 tokenManager.saveAccessToken(loginResponse.accessToken)
                                 tokenManager.saveCustomerId(loginResponse.customerId)
+                                tokenManager.saveCustomerName(loginResponse.name)
                                 onLoginSuccess(loginResponse.customerId)
                             } else {
                                 message = "로그인 실패: ${response.code()}"

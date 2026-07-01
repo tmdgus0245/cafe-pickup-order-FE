@@ -1,6 +1,7 @@
 package com.cafepickuporder.android.ui.mypage
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,19 +12,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,14 +39,27 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
+import com.cafepickuporder.android.data.request.CustomerPhoneUpdateRequest
+import com.cafepickuporder.android.data.request.CustomerProfileUpdateRequest
 import com.cafepickuporder.android.local.TokenManager
 import com.cafepickuporder.android.ui.theme.Ink
 import com.cafepickuporder.android.ui.theme.Muted
-import com.cafepickuporder.android.ui.theme.PageGray
 import com.cafepickuporder.android.ui.theme.PassOrange
 import com.cafepickuporder.android.ui.theme.SoftOrange
+import kotlinx.coroutines.launch
+
+private val emailPattern = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+private val phonePattern = Regex("^01[016789]-?\\d{3,4}-?\\d{4}$")
+
+private data class EditableProfile(
+    val name: String,
+    val email: String,
+    val phone: String,
+    val profileImageUrl: String?
+)
 
 @Composable
 fun MyPageScreen(
@@ -47,30 +68,141 @@ fun MyPageScreen(
 ) {
     val context = LocalContext.current
     val tokenManager = remember { TokenManager(context) }
+    val coroutineScope = rememberCoroutineScope()
 
-    var customerIdText by remember { mutableStateOf("불러오는 중") }
+    var customerName by remember {
+        mutableStateOf(tokenManager.getCustomerName().orEmpty().ifBlank { "고객" })
+    }
+    var customerEmail by remember { mutableStateOf("") }
+    var customerPhone by remember { mutableStateOf("") }
+    var profileImageUrl by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf("") }
+    var isEditingProfile by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        val token = tokenManager.getAccessToken() ?: return@LaunchedEffect
         try {
-            val token = tokenManager.getAccessToken()
-
-            if (token == null) {
-                customerIdText = "로그인 정보 없음"
-                return@LaunchedEffect
-            }
-
             val response = ApiClient.authApi.getMyInfo("Bearer $token")
-
-            customerIdText = if (response.isSuccessful && response.body() != null) {
-                "고객 ID ${response.body()!!.customerId}"
-            } else {
-                "내 정보 조회 실패"
+            if (response.isSuccessful && response.body() != null) {
+                val profile = response.body()!!
+                customerName = profile.name.ifBlank { "고객" }
+                customerEmail = profile.email
+                customerPhone = profile.phone.orEmpty()
+                profileImageUrl = profile.profileImageUrl
+                tokenManager.saveCustomerName(customerName)
             }
         } catch (e: Exception) {
-            customerIdText = "서버 연결 실패"
+            message = "프로필 정보를 불러오지 못했습니다."
         }
     }
 
+    if (isEditingProfile) {
+        ProfileEditScreen(
+            modifier = modifier,
+            profile = EditableProfile(
+                name = customerName,
+                email = customerEmail,
+                phone = customerPhone,
+                profileImageUrl = profileImageUrl
+            ),
+            message = message,
+            isSaving = isSaving,
+            onBack = { isEditingProfile = false },
+            onSave = { draft ->
+                coroutineScope.launch {
+                    val token = tokenManager.getAccessToken()
+                    if (token == null) {
+                        message = "로그인이 필요합니다."
+                        return@launch
+                    }
+
+                    if (draft.email.isBlank()) {
+                        message = "이메일을 입력해 주세요."
+                        return@launch
+                    }
+
+                    if (!emailPattern.matches(draft.email)) {
+                        message = "이메일 형식에 맞게 입력해 주세요."
+                        return@launch
+                    }
+
+                    if (draft.phone.isBlank()) {
+                        message = "휴대폰 번호를 입력해 주세요."
+                        return@launch
+                    }
+
+                    if (!phonePattern.matches(draft.phone)) {
+                        message = "휴대폰 번호 형식에 맞게 입력해 주세요."
+                        return@launch
+                    }
+
+                    isSaving = true
+                    message = ""
+
+                    try {
+                        val profileResponse = ApiClient.authApi.updateMyProfile(
+                            authorization = "Bearer $token",
+                            request = CustomerProfileUpdateRequest(
+                                name = draft.name.ifBlank { "고객" },
+                                email = draft.email,
+                                profileImageUrl = draft.profileImageUrl
+                            )
+                        )
+
+                        if (!profileResponse.isSuccessful || profileResponse.body() == null) {
+                            message = "프로필 수정 실패: ${profileResponse.code()}"
+                            return@launch
+                        }
+
+                        val phoneResponse = ApiClient.authApi.updateMyPhone(
+                            authorization = "Bearer $token",
+                            request = CustomerPhoneUpdateRequest(phone = draft.phone)
+                        )
+
+                        if (!phoneResponse.isSuccessful || phoneResponse.body() == null) {
+                            message = "휴대폰 번호 수정 실패: ${phoneResponse.code()}"
+                            return@launch
+                        }
+
+                        val profile = phoneResponse.body()!!
+                        customerName = profile.name.ifBlank { "고객" }
+                        customerEmail = profile.email
+                        customerPhone = profile.phone.orEmpty()
+                        profileImageUrl = profile.profileImageUrl
+                        tokenManager.saveCustomerName(customerName)
+                        isEditingProfile = false
+                    } catch (e: Exception) {
+                        message = "서버 연결 실패: ${e.message}"
+                    } finally {
+                        isSaving = false
+                    }
+                }
+            }
+        )
+    } else {
+        MyPageHomeScreen(
+            modifier = modifier,
+            customerName = customerName,
+            onEditProfile = {
+                message = ""
+                isEditingProfile = true
+            },
+            onLogout = {
+                tokenManager.clearAccessToken()
+                onLogout()
+            }
+        )
+    }
+}
+
+@Composable
+private fun MyPageHomeScreen(
+    modifier: Modifier,
+    customerName: String,
+    onEditProfile: () -> Unit,
+    onLogout: () -> Unit
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -88,39 +220,37 @@ fun MyPageScreen(
         Spacer(modifier = Modifier.height(34.dp))
 
         Row(
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFD6E7F5)),
-                contentAlignment = Alignment.Center
+            ProfileAvatar(
+                text = customerName.firstOrNull()?.toString() ?: "나",
+                size = 72
+            )
+
+            Spacer(modifier = Modifier.width(18.dp))
+
+            Text(
+                text = "${customerName}님",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ink,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+
+            Surface(
+                modifier = Modifier.clickable { onEditProfile() },
+                shape = RoundedCornerShape(18.dp),
+                color = Color.White,
+                tonalElevation = 1.dp,
+                shadowElevation = 1.dp
             ) {
                 Text(
-                    text = "나",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.size(18.dp))
-
-            Column {
-                Text(
-                    text = "카페 픽업 고객님",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = "✎ 수정",
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.titleMedium,
                     color = Ink,
                     fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = customerIdText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Muted
                 )
             }
         }
@@ -143,9 +273,7 @@ fun MyPageScreen(
             shape = RoundedCornerShape(14.dp),
             color = SoftOrange
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text(
                     text = "자주 쓰는 주문을 더 빠르게",
                     style = MaterialTheme.typography.titleMedium,
@@ -181,13 +309,179 @@ fun MyPageScreen(
         Spacer(modifier = Modifier.weight(1f))
 
         Button(
-            onClick = {
-                tokenManager.clearAccessToken()
-                onLogout()
-            },
-            modifier = Modifier.fillMaxWidth()
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = PassOrange)
         ) {
             Text("로그아웃")
+        }
+    }
+}
+
+@Composable
+private fun ProfileEditScreen(
+    modifier: Modifier,
+    profile: EditableProfile,
+    message: String,
+    isSaving: Boolean,
+    onBack: () -> Unit,
+    onSave: (EditableProfile) -> Unit
+) {
+    var draftName by remember(profile.name) { mutableStateOf(profile.name) }
+    var draftEmail by remember(profile.email) { mutableStateOf(profile.email) }
+    var draftPhone by remember(profile.phone) { mutableStateOf(profile.phone) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(horizontal = 24.dp, vertical = 18.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "<",
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .clickable(enabled = !isSaving) { onBack() }
+                    .padding(10.dp),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ink,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = "프로필 수정",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Ink,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            TextButton(
+                onClick = {
+                    onSave(
+                        EditableProfile(
+                            name = draftName.trim().ifBlank { "고객" },
+                            email = draftEmail.trim(),
+                            phone = draftPhone.trim(),
+                            profileImageUrl = profile.profileImageUrl
+                        )
+                    )
+                },
+                enabled = !isSaving,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Text(
+                    text = if (isSaving) "저장 중" else "완료",
+                    color = Ink,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(48.dp))
+
+        Text(
+            text = "프로필 정보",
+            style = MaterialTheme.typography.headlineSmall,
+            color = Ink,
+            fontWeight = FontWeight.ExtraBold
+        )
+
+        Spacer(modifier = Modifier.height(42.dp))
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            ProfileAvatar(text = draftName.firstOrNull()?.toString() ?: "나", size = 128)
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "프로필 사진 수정",
+                style = MaterialTheme.typography.titleMedium,
+                color = PassOrange,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(56.dp))
+
+        ProfileTextField(
+            label = "닉네임",
+            value = draftName,
+            onValueChange = { draftName = it }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        ProfileTextField(
+            label = "이메일",
+            value = draftEmail,
+            onValueChange = { draftEmail = it }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        ProfileTextField(
+            label = "휴대폰",
+            value = draftPhone,
+            onValueChange = { draftPhone = it }
+        )
+
+        if (message.isNotBlank()) {
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileAvatar(
+    text: String,
+    size: Int
+) {
+    Box(
+        modifier = Modifier
+            .size(size.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF9EBBD5)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size((size * 0.28f).dp)
+                .clip(CircleShape)
+                .align(Alignment.Center)
+                .background(Color(0xFFD7E6F2))
+        )
+
+        Box(
+            modifier = Modifier
+                .size(width = (size * 0.68f).dp, height = (size * 0.34f).dp)
+                .clip(RoundedCornerShape(topStartPercent = 60, topEndPercent = 60))
+                .align(Alignment.BottomCenter)
+                .background(Color(0xFFD7E6F2))
+        )
+
+        if (size <= 80) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -248,6 +542,32 @@ private fun MyPageRow(
             text = trailing,
             style = MaterialTheme.typography.bodyMedium,
             color = Muted
+        )
+    }
+}
+
+@Composable
+private fun ProfileTextField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = Ink,
+            modifier = Modifier.width(86.dp)
+        )
+
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            modifier = Modifier.weight(1f)
         )
     }
 }

@@ -19,6 +19,12 @@ class TokenManager(context: Context) {
             .apply()
     }
 
+    fun saveCustomerName(name: String) {
+        sharedPreferences.edit()
+            .putString("customerName", name)
+            .apply()
+    }
+
     fun saveStoreSession(token: String, storeId: Long) {
         sharedPreferences.edit()
             .putString("storeAccessToken", token)
@@ -35,6 +41,10 @@ class TokenManager(context: Context) {
         return if (customerId == -1L) null else customerId
     }
 
+    fun getCustomerName(): String? {
+        return sharedPreferences.getString("customerName", null)
+    }
+
     fun getStoreAccessToken(): String? {
         return sharedPreferences.getString("storeAccessToken", null)
     }
@@ -48,6 +58,7 @@ class TokenManager(context: Context) {
         sharedPreferences.edit()
             .remove("accessToken")
             .remove("customerId")
+            .remove("customerName")
             .remove("storeAccessToken")
             .remove("storeId")
             .apply()
