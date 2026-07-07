@@ -118,6 +118,7 @@ fun StoreListScreen(
 
         try {
             val loadedStores = ApiClient.storeApi.getStores()
+                .filterNot { it.status.equals("INACTIVE", ignoreCase = true) }
             stores = loadedStores
 
             val details = mutableMapOf<Long, StoreDetailResponse>()

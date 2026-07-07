@@ -1,5 +1,11 @@
 package com.cafepickuporder.android.ui.mypage
 
+import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -82,6 +90,7 @@ fun MyPageScreen(
 
     LaunchedEffect(Unit) {
         val token = tokenManager.getAccessToken() ?: return@LaunchedEffect
+
         try {
             val response = ApiClient.authApi.getMyInfo("Bearer $token")
             if (response.isSuccessful && response.body() != null) {
@@ -117,23 +126,38 @@ fun MyPageScreen(
                         return@launch
                     }
 
-                    if (draft.email.isBlank()) {
+                    val nextName = draft.name.trim().ifBlank { "고객" }
+                    val nextEmail = draft.email.trim()
+                    val nextPhone = draft.phone.trim()
+
+                    if (nextEmail.isBlank()) {
                         message = "이메일을 입력해 주세요."
                         return@launch
                     }
 
-                    if (!emailPattern.matches(draft.email)) {
+                    if (!emailPattern.matches(nextEmail)) {
                         message = "이메일 형식에 맞게 입력해 주세요."
                         return@launch
                     }
 
-                    if (draft.phone.isBlank()) {
+                    if (nextPhone.isBlank()) {
                         message = "휴대폰 번호를 입력해 주세요."
                         return@launch
                     }
 
-                    if (!phonePattern.matches(draft.phone)) {
+                    if (!phonePattern.matches(nextPhone)) {
                         message = "휴대폰 번호 형식에 맞게 입력해 주세요."
+                        return@launch
+                    }
+
+                    val profileChanged =
+                        nextName != customerName ||
+                            nextEmail != customerEmail ||
+                            draft.profileImageUrl != profileImageUrl
+                    val phoneChanged = nextPhone != customerPhone
+
+                    if (!profileChanged && !phoneChanged) {
+                        isEditingProfile = false
                         return@launch
                     }
 
@@ -141,35 +165,55 @@ fun MyPageScreen(
                     message = ""
 
                     try {
-                        val profileResponse = ApiClient.authApi.updateMyProfile(
-                            authorization = "Bearer $token",
-                            request = CustomerProfileUpdateRequest(
-                                name = draft.name.ifBlank { "고객" },
-                                email = draft.email,
-                                profileImageUrl = draft.profileImageUrl
+                        var updatedName = customerName
+                        var updatedEmail = customerEmail
+                        var updatedPhone = customerPhone
+                        var updatedProfileImageUrl = profileImageUrl
+
+                        if (profileChanged) {
+                            val profileResponse = ApiClient.authApi.updateMyProfile(
+                                authorization = "Bearer $token",
+                                request = CustomerProfileUpdateRequest(
+                                    name = nextName,
+                                    email = nextEmail,
+                                    profileImageUrl = draft.profileImageUrl
+                                )
                             )
-                        )
 
-                        if (!profileResponse.isSuccessful || profileResponse.body() == null) {
-                            message = "프로필 수정 실패: ${profileResponse.code()}"
-                            return@launch
+                            if (!profileResponse.isSuccessful || profileResponse.body() == null) {
+                                message = "프로필 수정 실패: ${profileResponse.code()}"
+                                return@launch
+                            }
+
+                            val profile = profileResponse.body()!!
+                            updatedName = profile.name.ifBlank { "고객" }
+                            updatedEmail = profile.email
+                            updatedPhone = profile.phone.orEmpty()
+                            updatedProfileImageUrl = profile.profileImageUrl
                         }
 
-                        val phoneResponse = ApiClient.authApi.updateMyPhone(
-                            authorization = "Bearer $token",
-                            request = CustomerPhoneUpdateRequest(phone = draft.phone)
-                        )
+                        if (phoneChanged) {
+                            val phoneResponse = ApiClient.authApi.updateMyPhone(
+                                authorization = "Bearer $token",
+                                request = CustomerPhoneUpdateRequest(phone = nextPhone)
+                            )
 
-                        if (!phoneResponse.isSuccessful || phoneResponse.body() == null) {
-                            message = "휴대폰 번호 수정 실패: ${phoneResponse.code()}"
-                            return@launch
+                            if (!phoneResponse.isSuccessful || phoneResponse.body() == null) {
+                                message = "휴대폰 번호 수정 실패: ${phoneResponse.code()}"
+                                return@launch
+                            }
+
+                            val profile = phoneResponse.body()!!
+                            updatedName = profile.name.ifBlank { "고객" }
+                            updatedEmail = profile.email
+                            updatedPhone = profile.phone.orEmpty()
+                            updatedProfileImageUrl = profile.profileImageUrl
                         }
 
-                        val profile = phoneResponse.body()!!
-                        customerName = profile.name.ifBlank { "고객" }
-                        customerEmail = profile.email
-                        customerPhone = profile.phone.orEmpty()
-                        profileImageUrl = profile.profileImageUrl
+                        customerName = updatedName
+                        customerEmail = updatedEmail
+                        customerPhone = updatedPhone
+                        profileImageUrl = updatedProfileImageUrl
                         tokenManager.saveCustomerName(customerName)
                         isEditingProfile = false
                     } catch (e: Exception) {
@@ -184,6 +228,7 @@ fun MyPageScreen(
         MyPageHomeScreen(
             modifier = modifier,
             customerName = customerName,
+            profileImageUrl = profileImageUrl,
             onEditProfile = {
                 message = ""
                 isEditingProfile = true
@@ -200,6 +245,7 @@ fun MyPageScreen(
 private fun MyPageHomeScreen(
     modifier: Modifier,
     customerName: String,
+    profileImageUrl: String?,
     onEditProfile: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -225,7 +271,8 @@ private fun MyPageHomeScreen(
         ) {
             ProfileAvatar(
                 text = customerName.firstOrNull()?.toString() ?: "나",
-                size = 72
+                size = 72,
+                imageUri = profileImageUrl
             )
 
             Spacer(modifier = Modifier.width(18.dp))
@@ -327,9 +374,26 @@ private fun ProfileEditScreen(
     onBack: () -> Unit,
     onSave: (EditableProfile) -> Unit
 ) {
+    val context = LocalContext.current
     var draftName by remember(profile.name) { mutableStateOf(profile.name) }
     var draftEmail by remember(profile.email) { mutableStateOf(profile.email) }
     var draftPhone by remember(profile.phone) { mutableStateOf(profile.phone) }
+    var draftProfileImageUrl by remember(profile.profileImageUrl) {
+        mutableStateOf(profile.profileImageUrl)
+    }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        draftProfileImageUrl = uri.toString()
+    }
 
     Column(
         modifier = modifier
@@ -364,10 +428,10 @@ private fun ProfileEditScreen(
                 onClick = {
                     onSave(
                         EditableProfile(
-                            name = draftName.trim().ifBlank { "고객" },
-                            email = draftEmail.trim(),
-                            phone = draftPhone.trim(),
-                            profileImageUrl = profile.profileImageUrl
+                            name = draftName,
+                            email = draftEmail,
+                            phone = draftPhone,
+                            profileImageUrl = draftProfileImageUrl
                         )
                     )
                 },
@@ -398,12 +462,19 @@ private fun ProfileEditScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            ProfileAvatar(text = draftName.firstOrNull()?.toString() ?: "나", size = 128)
+            ProfileAvatar(
+                text = draftName.firstOrNull()?.toString() ?: "나",
+                size = 128,
+                imageUri = draftProfileImageUrl
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "프로필 사진 수정",
+                modifier = Modifier.clickable(enabled = !isSaving) {
+                    imagePickerLauncher.launch(arrayOf("image/*"))
+                },
                 style = MaterialTheme.typography.titleMedium,
                 color = PassOrange,
                 fontWeight = FontWeight.Bold
@@ -412,27 +483,15 @@ private fun ProfileEditScreen(
 
         Spacer(modifier = Modifier.height(56.dp))
 
-        ProfileTextField(
-            label = "닉네임",
-            value = draftName,
-            onValueChange = { draftName = it }
-        )
+        ProfileTextField("닉네임", draftName) { draftName = it }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        ProfileTextField(
-            label = "이메일",
-            value = draftEmail,
-            onValueChange = { draftEmail = it }
-        )
+        ProfileTextField("이메일", draftEmail) { draftEmail = it }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        ProfileTextField(
-            label = "휴대폰",
-            value = draftPhone,
-            onValueChange = { draftPhone = it }
-        )
+        ProfileTextField("휴대폰", draftPhone) { draftPhone = it }
 
         if (message.isNotBlank()) {
             Spacer(modifier = Modifier.height(14.dp))
@@ -449,8 +508,22 @@ private fun ProfileEditScreen(
 @Composable
 private fun ProfileAvatar(
     text: String,
-    size: Int
+    size: Int,
+    imageUri: String? = null
 ) {
+    val context = LocalContext.current
+    val imageBitmap = remember(imageUri) {
+        if (imageUri.isNullOrBlank()) {
+            null
+        } else {
+            runCatching {
+                context.contentResolver.openInputStream(Uri.parse(imageUri)).use { inputStream ->
+                    BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                }
+            }.getOrNull()
+        }
+    }
+
     Box(
         modifier = Modifier
             .size(size.dp)
@@ -458,6 +531,16 @@ private fun ProfileAvatar(
             .background(Color(0xFF9EBBD5)),
         contentAlignment = Alignment.Center
     ) {
+        if (imageBitmap != null) {
+            Image(
+                bitmap = imageBitmap,
+                contentDescription = "프로필 사진",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            return@Box
+        }
+
         Box(
             modifier = Modifier
                 .size((size * 0.28f).dp)

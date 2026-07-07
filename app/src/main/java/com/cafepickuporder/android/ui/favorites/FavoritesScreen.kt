@@ -68,13 +68,19 @@ fun FavoritesScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text(
-                text = "자주가요",
-                modifier = Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp),
-                style = MaterialTheme.typography.headlineMedium,
-                color = Ink,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, top = 20.dp, end = 20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "자주가요",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Ink,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
         }
 
         when {
@@ -91,7 +97,7 @@ fun FavoritesScreen(
 
             loadError -> item {
                 Text(
-                    text = "즐겨찾기 매장을 불러오지 못했습니다.",
+                    text = "자주 가는 매장을 불러오지 못했습니다.",
                     modifier = Modifier.padding(horizontal = 20.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = Muted
@@ -108,7 +114,7 @@ fun FavoritesScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "매장 메뉴 화면에서 즐겨찾기 버튼을 눌러 등록해보세요.",
+                        text = "매장 메뉴 화면에서 자주가는 매장 버튼을 눌러 등록해보세요.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Muted
                     )

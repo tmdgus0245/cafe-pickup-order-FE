@@ -143,7 +143,12 @@ private fun DetailTopBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         TextButton(onClick = onBackClick) {
-            Text("‹", color = Ink, style = MaterialTheme.typography.headlineMedium)
+            Text(
+                text = "<",
+                color = Ink,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         Text(

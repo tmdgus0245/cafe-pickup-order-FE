@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.model.CartItem
 import com.cafepickuporder.android.data.remote.ApiClient
@@ -90,12 +91,16 @@ fun CartScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onBackClick) {
-                Text("뒤로")
+                Text(
+                    text = "<",
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Text(
                 text = "장바구니",
-                style = MaterialTheme.typography.headlineSmall
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold
             )
         }
 

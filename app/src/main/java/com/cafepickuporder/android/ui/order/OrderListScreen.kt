@@ -1,6 +1,7 @@
 package com.cafepickuporder.android.ui.order
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.request.OrderCancelRequest
@@ -110,47 +112,39 @@ fun OrderListScreen(
             .fillMaxSize()
             .padding(20.dp)
     ) {
-        Row(
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            contentAlignment = Alignment.Center
         ) {
-            TextButton(onClick = onBackClick) {
-                Text("뒤로")
-            }
-
-            Column {
-                Text(
-                    text = "주문 내역",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "최근 주문 상태와 픽업 시간을 확인하세요.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "주문내역",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
         when {
             isLoading -> {
-                CircularProgressIndicator()
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
 
             errorMessage != null -> {
                 Text(
-                    text = "주문 내역을 불러오지 못했습니다.\n$errorMessage",
+                    text = "주문내역을 불러오지 못했습니다.\n$errorMessage",
                     color = MaterialTheme.colorScheme.error
                 )
             }
 
             orders.isEmpty() -> {
                 Text(
-                    text = "아직 주문 내역이 없습니다.",
+                    text = "아직 주문내역이 없습니다.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

@@ -15,7 +15,7 @@ object FavoriteStoreManager {
         if (accessToken.isBlank()) return
         val loadedStores = ApiClient.favoriteStoreApi.getFavoriteStores(
             authorization = "Bearer $accessToken"
-        )
+        ).filterNot { it.status.equals("INACTIVE", ignoreCase = true) }
         stores.clear()
         stores.addAll(loadedStores)
     }
