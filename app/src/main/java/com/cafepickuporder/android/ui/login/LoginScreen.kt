@@ -26,8 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.request.LoginRequest
@@ -48,7 +48,8 @@ private enum class LoginMode {
 fun LoginScreen(
     onLoginSuccess: (Long) -> Unit,
     onOwnerLoginSuccess: (Long, String) -> Unit,
-    onMoveToSignup: () -> Unit
+    onMoveToSignup: () -> Unit,
+    onMoveToOwnerSignup: () -> Unit
 ) {
     val context = LocalContext.current
     val tokenManager = remember { TokenManager(context) }
@@ -82,7 +83,7 @@ fun LoginScreen(
             text = if (mode == LoginMode.Customer) {
                 "가까운 카페에 미리 주문하고 바로 픽업하세요."
             } else {
-                "매장 주문을 접수하고 상태를 관리하세요."
+                "매장 주문을 접수하고 메뉴를 관리하세요."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = Muted
@@ -188,8 +189,8 @@ fun LoginScreen(
                 Text("계정이 없나요? 회원가입")
             }
         } else {
-            TextButton(onClick = { mode = LoginMode.Customer }) {
-                Text("고객 계정으로 로그인")
+            TextButton(onClick = onMoveToOwnerSignup) {
+                Text("사장님 계정 만들기")
             }
         }
 

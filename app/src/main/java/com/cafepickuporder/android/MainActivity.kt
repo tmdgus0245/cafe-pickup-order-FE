@@ -22,6 +22,7 @@ import com.cafepickuporder.android.ui.favorites.FavoriteStoreManager
 import com.cafepickuporder.android.ui.login.LoginScreen
 import com.cafepickuporder.android.ui.mypage.MyPageScreen
 import com.cafepickuporder.android.ui.signup.SignupScreen
+import com.cafepickuporder.android.ui.signup.StoreAccountSignupScreen
 import com.cafepickuporder.android.ui.store.MenuDetailScreen
 import com.cafepickuporder.android.ui.store.MenuListScreen
 import com.cafepickuporder.android.ui.store.StoreListScreen
@@ -72,7 +73,7 @@ fun App() {
 
     BackHandler(enabled = screen != "login") {
         when (screen) {
-            "signup" -> {
+            "signup", "ownerSignup" -> {
                 screen = "login"
             }
 
@@ -120,7 +121,8 @@ fun App() {
                 ownerAccessToken = accessToken
                 screen = "ownerOrders"
             },
-            onMoveToSignup = { screen = "signup" }
+            onMoveToSignup = { screen = "signup" },
+            onMoveToOwnerSignup = { screen = "ownerSignup" }
         )
 
         "ownerOrders" -> StoreOwnerScreen(
@@ -134,6 +136,10 @@ fun App() {
         )
 
         "signup" -> SignupScreen(
+            onMoveToLogin = { screen = "login" }
+        )
+
+        "ownerSignup" -> StoreAccountSignupScreen(
             onMoveToLogin = { screen = "login" }
         )
 
