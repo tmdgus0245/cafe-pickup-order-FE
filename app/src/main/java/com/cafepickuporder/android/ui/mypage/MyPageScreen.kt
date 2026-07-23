@@ -270,7 +270,7 @@ private fun MyPageHomeScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             ProfileAvatar(
-                text = customerName.firstOrNull()?.toString() ?: "나",
+                text = "",
                 size = 72,
                 imageUri = profileImageUrl
             )
@@ -463,7 +463,7 @@ private fun ProfileEditScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             ProfileAvatar(
-                text = draftName.firstOrNull()?.toString() ?: "나",
+                text = "",
                 size = 128,
                 imageUri = draftProfileImageUrl
             )
