@@ -1,9 +1,11 @@
 package com.cafepickuporder.android.ui.store
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.cafepickuporder.android.data.remote.ApiClient
@@ -901,13 +905,21 @@ private fun CategoryNameDialog(
 
     ManageDialog(
         title = if (category == null) "카테고리 추가" else "카테고리 이름 수정",
+        subtitle = if (category == null) {
+            "메뉴를 보기 좋게 묶을 새 분류를 만들어보세요."
+        } else {
+            "고객에게 표시되는 카테고리 이름을 변경해요."
+        },
         onDismiss = onDismiss,
-        onSave = { onSave(name) }
+        onSave = { onSave(name.trim()) },
+        saveEnabled = name.isNotBlank()
     ) {
+        DialogSectionLabel("카테고리 정보")
         ManageTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("카테고리명") },
+            label = { Text("카테고리 이름") },
+            placeholder = "예: 시즌 메뉴",
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -923,13 +935,17 @@ private fun MenuNameDialog(
 
     ManageDialog(
         title = "메뉴 이름 수정",
+        subtitle = "고객에게 표시되는 메뉴 이름을 변경해요.",
         onDismiss = onDismiss,
-        onSave = { onSave(name) }
+        onSave = { onSave(name.trim()) },
+        saveEnabled = name.isNotBlank()
     ) {
+        DialogSectionLabel("메뉴 정보")
         ManageTextField(
             value = name,
             onValueChange = { name = it },
             label = { Text("메뉴명") },
+            placeholder = "메뉴 이름을 입력해주세요",
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -953,6 +969,11 @@ private fun MenuDialog(
 
     ManageDialog(
         title = if (menu == null) "메뉴 추가" else "메뉴 수정",
+        subtitle = if (menu == null) {
+            "새 메뉴의 기본 정보와 판매 상태를 설정해요."
+        } else {
+            "메뉴 정보를 확인하고 필요한 내용을 바꿔주세요."
+        },
         onDismiss = onDismiss,
         onSave = {
             onSave(
@@ -966,10 +987,18 @@ private fun MenuDialog(
                     displayOrder = menu?.displayOrder ?: 0
                 )
             )
-        }
+        },
+        saveEnabled = name.isNotBlank() &&
+            selectedCategoryId != 0L &&
+            (price.toIntOrNull() ?: -1) >= 0
     ) {
-        Text("카테고리", color = Ink, fontWeight = FontWeight.Bold)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DialogSectionLabel("카테고리")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+        ) {
             categories.forEach { category ->
                 SelectChip(
                     text = category.name,
@@ -979,11 +1008,35 @@ private fun MenuDialog(
             }
         }
 
-        ManageTextField(name, { name = it }, label = { Text("메뉴명") }, modifier = Modifier.fillMaxWidth())
-        ManageTextField(description, { description = it }, label = { Text("설명") }, modifier = Modifier.fillMaxWidth())
-        ManageTextField(price, { price = it }, label = { Text("가격") }, modifier = Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(2.dp))
+        DialogSectionLabel("기본 정보")
+        ManageTextField(
+            name,
+            { name = it },
+            label = { Text("메뉴명") },
+            placeholder = "예: 바닐라 라떼",
+            modifier = Modifier.fillMaxWidth()
+        )
+        ManageTextField(
+            description,
+            { description = it },
+            label = { Text("메뉴 설명") },
+            placeholder = "맛과 특징을 간단히 소개해주세요",
+            singleLine = false,
+            minLines = 2,
+            modifier = Modifier.fillMaxWidth()
+        )
+        ManageTextField(
+            price,
+            { price = it.filter(Char::isDigit) },
+            label = { Text("가격") },
+            placeholder = "0",
+            suffix = "원",
+            modifier = Modifier.fillMaxWidth()
+        )
 
-        Text("상태", color = Ink, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        DialogSectionLabel("판매 상태")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("ON_SALE", "SOLD_OUT", "HIDDEN").forEach { value ->
                 SelectChip(
@@ -1066,14 +1119,21 @@ private fun SelectChip(
 ) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = if (selected) PassOrange else PageGray,
+        color = if (selected) PassOrange else Color(0xFFFFF8F4),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) PassOrange else Color(0xFFF1DED4)
+        ),
+        shadowElevation = if (selected) 2.dp else 0.dp,
         modifier = Modifier.clickable { onClick() }
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            color = if (selected) Color.White else Ink,
-            fontWeight = FontWeight.Bold
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            color = if (selected) Color.White else Color(0xFF6D4C3D),
+            fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -1081,38 +1141,71 @@ private fun SelectChip(
 @Composable
 private fun ManageDialog(
     title: String,
+    subtitle: String? = null,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
+    saveEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(26.dp),
-        containerColor = Color.White,
-        tonalElevation = 8.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        shape = RoundedCornerShape(28.dp),
+        containerColor = Color(0xFFFFFBF8),
+        tonalElevation = 0.dp,
         title = {
-            Text(
-                text = title,
-                color = Ink,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Surface(
+                    color = Color(0xFFFFE9DE),
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text(
+                        text = if (title.contains("추가")) "새로 만들기" else "정보 변경",
+                        color = Color(0xFFD84D28),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+                Text(
+                    text = title,
+                    color = Ink,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        color = Muted,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 content()
             }
         },
         confirmButton = {
             Button(
                 onClick = onSave,
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = PassOrange)
+                enabled = saveEnabled,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PassOrange,
+                    disabledContainerColor = Color(0xFFF0D7CB),
+                    disabledContentColor = Color.White
+                ),
+                modifier = Modifier.height(48.dp)
             ) {
                 Text(
                     text = "저장",
                     color = Color.White,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(horizontal = 10.dp)
                 )
             }
         },
@@ -1120,7 +1213,7 @@ private fun ManageDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     text = "닫기",
-                    color = Muted,
+                    color = Color(0xFF7A655B),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -1133,24 +1226,45 @@ private fun ManageTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: @Composable (() -> Unit),
+    placeholder: String? = null,
+    suffix: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
     modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = label,
-        singleLine = true,
-        shape = RoundedCornerShape(14.dp),
+        placeholder = placeholder?.let {
+            { Text(text = it, color = Color(0xFFB3A49C)) }
+        },
+        suffix = suffix?.let {
+            { Text(text = it, color = Muted, fontWeight = FontWeight.SemiBold) }
+        },
+        singleLine = singleLine,
+        minLines = minLines,
+        shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = PassOrange,
-            unfocusedBorderColor = Color(0xFFE4E0DD),
+            unfocusedBorderColor = Color(0xFFEADFD9),
             focusedLabelColor = PassOrange,
             unfocusedLabelColor = Muted,
             cursorColor = PassOrange,
             focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White
+            unfocusedContainerColor = Color(0xFFFFFEFD)
         ),
         modifier = modifier
+    )
+}
+
+@Composable
+private fun DialogSectionLabel(text: String) {
+    Text(
+        text = text,
+        color = Color(0xFF725B50),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.ExtraBold
     )
 }
 

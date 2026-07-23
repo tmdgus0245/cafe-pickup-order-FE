@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.os.Bundle
+import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -27,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,10 +39,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +56,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.cafepickuporder.android.BuildConfig
+import com.cafepickuporder.android.R
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.response.MenuResponse
 import com.cafepickuporder.android.data.response.StoreDetailResponse
@@ -61,6 +70,12 @@ import com.cafepickuporder.android.ui.theme.Muted
 import com.cafepickuporder.android.ui.theme.PageGray
 import com.cafepickuporder.android.ui.theme.PassOrange
 import com.cafepickuporder.android.ui.theme.SelectedNavy
+import com.naver.maps.geometry.LatLng
+import com.naver.maps.map.CameraUpdate
+import com.naver.maps.map.MapView
+import com.naver.maps.map.NaverMap
+import com.naver.maps.map.overlay.Marker
+import com.naver.maps.map.overlay.OverlayImage
 import java.util.Locale
 
 private const val LIST_MODE = "LIST"
@@ -80,6 +95,8 @@ private data class MenuSearchResult(
 @Composable
 fun StoreListScreen(
     modifier: Modifier = Modifier,
+    initialMapMode: Boolean = false,
+    onMapModeChanged: (Boolean) -> Unit = {},
     onStoreClick: (Long) -> Unit,
     onMenuClick: (Long, Long) -> Unit
 ) {
@@ -90,7 +107,9 @@ fun StoreListScreen(
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var orderMode by remember { mutableStateOf(LIST_MODE) }
+    var orderMode by remember(initialMapMode) {
+        mutableStateOf(if (initialMapMode) MAP_MODE else LIST_MODE)
+    }
     var showPhoneOnlyStores by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -202,7 +221,10 @@ fun StoreListScreen(
         if (normalizedQuery.isBlank()) {
             OrderModeTabs(
                 selectedMode = orderMode,
-                onModeSelected = { orderMode = it }
+                onModeSelected = {
+                    orderMode = it
+                    onMapModeChanged(it == MAP_MODE)
+                }
             )
 
             StoreListContent(
@@ -210,10 +232,15 @@ fun StoreListScreen(
                 showPhoneOnlyStores = showPhoneOnlyStores,
                 onPhoneFilterChange = { showPhoneOnlyStores = it },
                 stores = visibleStores,
+                storeDetails = storeDetails,
+                userLocation = userLocation,
                 allStoresEmpty = stores.isEmpty(),
                 isLoading = isLoading,
                 errorMessage = errorMessage,
-                onListModeClick = { orderMode = LIST_MODE },
+                onListModeClick = {
+                    orderMode = LIST_MODE
+                    onMapModeChanged(false)
+                },
                 onStoreClick = onStoreClick
             )
         } else {
@@ -285,6 +312,8 @@ private fun StoreListContent(
     showPhoneOnlyStores: Boolean,
     onPhoneFilterChange: (Boolean) -> Unit,
     stores: List<StoreWithDistance>,
+    storeDetails: Map<Long, StoreDetailResponse>,
+    userLocation: Location?,
     allStoresEmpty: Boolean,
     isLoading: Boolean,
     errorMessage: String?,
@@ -318,7 +347,14 @@ private fun StoreListContent(
                     color = MaterialTheme.colorScheme.error
                 )
             }
-            orderMode == MAP_MODE -> item { MapPlaceholder() }
+            orderMode == MAP_MODE -> item {
+                StoreOrderMap(
+                    stores = stores,
+                    storeDetails = storeDetails,
+                    userLocation = userLocation,
+                    onStoreClick = onStoreClick
+                )
+            }
             stores.isEmpty() -> item {
                 Text(
                     text = if (allStoresEmpty) {
@@ -685,20 +721,280 @@ private fun LoadingBox() {
 }
 
 @Composable
-private fun MapPlaceholder() {
+private fun StoreOrderMap(
+    stores: List<StoreWithDistance>,
+    storeDetails: Map<Long, StoreDetailResponse>,
+    userLocation: Location?,
+    onStoreClick: (Long) -> Unit
+) {
+    if (BuildConfig.NAVER_MAP_NCP_KEY_ID.isBlank()) {
+        MapMessage(
+            "네이버 지도 키가 필요합니다.\nlocal.properties에 NAVER_MAP_NCP_KEY_ID를 설정해주세요."
+        )
+        return
+    }
+
+    val context = LocalContext.current
+    val latestOnStoreClick by rememberUpdatedState(onStoreClick)
+    var naverMap by remember { mutableStateOf<NaverMap?>(null) }
+    var selectedStore by remember { mutableStateOf<StoreWithDistance?>(null) }
+    var markers by remember { mutableStateOf<List<Marker>>(emptyList()) }
+    var hasMovedCamera by remember { mutableStateOf(false) }
+    val storesWithCoordinates = remember(stores, storeDetails) {
+        stores.filter {
+            storeDetails[it.store.storeId]?.latitude != null &&
+                storeDetails[it.store.storeId]?.longitude != null
+        }
+    }
+    val mapView = remember {
+        MapView(context).apply {
+            onCreate(Bundle())
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN,
+                    MotionEvent.ACTION_MOVE -> view.parent?.requestDisallowInterceptTouchEvent(true)
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> view.parent?.requestDisallowInterceptTouchEvent(false)
+                }
+                false
+            }
+        }
+    }
+
+    DisposableEffect(mapView) {
+        mapView.onStart()
+        mapView.onResume()
+        mapView.getMapAsync { map ->
+            naverMap = map
+            map.uiSettings.isZoomControlEnabled = false
+            map.uiSettings.isLocationButtonEnabled = false
+            map.minZoom = 10.0
+        }
+
+        onDispose {
+            markers.forEach { it.map = null }
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
+        }
+    }
+
+    LaunchedEffect(naverMap, storesWithCoordinates) {
+        val map = naverMap ?: return@LaunchedEffect
+        markers.forEach { it.map = null }
+        markers = storesWithCoordinates.mapNotNull { storeWithDistance ->
+            val detail = storeDetails[storeWithDistance.store.storeId] ?: return@mapNotNull null
+            val latitude = detail.latitude ?: return@mapNotNull null
+            val longitude = detail.longitude ?: return@mapNotNull null
+
+            Marker(LatLng(latitude, longitude)).apply {
+                captionText = storeWithDistance.store.name
+                captionColor = android.graphics.Color.rgb(71, 48, 38)
+                captionHaloColor = android.graphics.Color.WHITE
+                captionTextSize = 13f
+                icon = OverlayImage.fromResource(R.drawable.ic_cafe_map_marker)
+                width = 64
+                height = 80
+                setOnClickListener {
+                    selectedStore = storeWithDistance
+                    map.moveCamera(CameraUpdate.scrollAndZoomTo(position, 15.5))
+                    true
+                }
+                this.map = map
+            }
+        }
+    }
+
+    LaunchedEffect(naverMap, userLocation, storesWithCoordinates) {
+        val map = naverMap ?: return@LaunchedEffect
+        if (hasMovedCamera) return@LaunchedEffect
+
+        val target = when {
+            userLocation != null -> {
+                map.locationOverlay.isVisible = true
+                map.locationOverlay.position =
+                    LatLng(userLocation.latitude, userLocation.longitude)
+                LatLng(userLocation.latitude, userLocation.longitude)
+            }
+            storesWithCoordinates.isNotEmpty() -> {
+                val detail = storeDetails.getValue(storesWithCoordinates.first().store.storeId)
+                LatLng(detail.latitude!!, detail.longitude!!)
+            }
+            else -> LatLng(37.5665, 126.9780)
+        }
+
+        map.moveCamera(CameraUpdate.scrollAndZoomTo(target, 14.0))
+        hasMovedCamera = true
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .height(420.dp),
+            .height(480.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = PageGray,
+        shadowElevation = 2.dp
+    ) {
+        Box {
+            AndroidView(
+                factory = { mapView },
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clickable(enabled = naverMap != null) {
+                        val currentLocation =
+                            userLocation ?: findLastKnownLocation(context)
+                        if (currentLocation != null) {
+                            val position = LatLng(
+                                currentLocation.latitude,
+                                currentLocation.longitude
+                            )
+                            naverMap?.locationOverlay?.apply {
+                                isVisible = true
+                                this.position = position
+                            }
+                            naverMap?.moveCamera(
+                                CameraUpdate.scrollAndZoomTo(position, 15.5)
+                            )
+                        }
+                    },
+                color = Color.White.copy(alpha = 0.94f),
+                shape = RoundedCornerShape(50),
+                shadowElevation = 2.dp
+            ) {
+                Text(
+                    text = "⌖  내 위치",
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+                    color = if (userLocation != null) Ink else Muted,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            selectedStore?.let { selected ->
+                MapStoreCard(
+                    selected = selected,
+                    onMenuClick = { latestOnStoreClick(selected.store.storeId) },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(12.dp)
+                )
+            }
+
+            if (storesWithCoordinates.isEmpty()) {
+                Surface(
+                    modifier = Modifier.align(Alignment.Center),
+                    color = Color.White.copy(alpha = 0.94f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        text = "지도에 표시할 매장 위치가 없습니다.",
+                        modifier = Modifier.padding(16.dp),
+                        color = Muted,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapStoreCard(
+    selected: StoreWithDistance,
+    onMenuClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color.White,
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = 8.dp
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selected.store.name,
+                        color = Ink,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = listOfNotNull(
+                            formatDistance(selected.distanceMeters),
+                            selected.store.address
+                        ).joinToString(" · "),
+                        color = Muted,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Surface(
+                    color = if (selected.store.appOrderAvailable) {
+                        Color(0xFFFFE9DE)
+                    } else {
+                        PageGray
+                    },
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text(
+                        text = if (selected.store.appOrderAvailable) "앱 주문" else "전화 주문",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        color = if (selected.store.appOrderAvailable) PassOrange else Muted,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onMenuClick,
+                enabled = selected.store.appOrderAvailable,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PassOrange)
+            ) {
+                Text(
+                    text = if (selected.store.appOrderAvailable) {
+                        "메뉴 보고 주문하기"
+                    } else {
+                        "앱 주문이 지원되지 않아요"
+                    },
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapMessage(message: String) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .height(220.dp),
         shape = RoundedCornerShape(16.dp),
-        color = PageGray
+        color = Color(0xFFFFF0EA)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
-                text = "지도 주문은 준비 중입니다.",
-                style = MaterialTheme.typography.titleLarge,
-                color = Ink,
+                text = message,
+                modifier = Modifier.padding(20.dp),
+                color = PassOrange,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold
             )
         }

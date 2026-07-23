@@ -1,19 +1,25 @@
 package com.cafepickuporder.android.ui.order
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,11 +37,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.request.OrderCancelRequest
 import com.cafepickuporder.android.data.response.OrderListResponse
+import com.cafepickuporder.android.ui.theme.Ink
+import com.cafepickuporder.android.ui.theme.Muted
+import com.cafepickuporder.android.ui.theme.PageGray
+import com.cafepickuporder.android.ui.theme.PassOrange
+import com.cafepickuporder.android.ui.theme.SoftOrange
 import kotlinx.coroutines.launch
 
 @Composable
@@ -110,50 +122,78 @@ fun OrderListScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(20.dp)
+            .background(Color(0xFFFFFBF8))
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "주문내역",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "주문내역",
+                    color = Ink,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = "주문 상태와 픽업 시간을 확인하세요.",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (orders.isNotEmpty()) {
+                Surface(
+                    color = SoftOrange,
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text(
+                        text = "${orders.size}건",
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                        color = PassOrange,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
         }
-
-        Spacer(modifier = Modifier.height(20.dp))
 
         when {
             isLoading -> {
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = PassOrange)
                 }
             }
 
             errorMessage != null -> {
-                Text(
-                    text = "주문내역을 불러오지 못했습니다.\n$errorMessage",
-                    color = MaterialTheme.colorScheme.error
-                )
+                Surface(
+                    modifier = Modifier.padding(20.dp),
+                    color = Color(0xFFFFEEEE),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        text = "주문내역을 불러오지 못했습니다.\n$errorMessage",
+                        modifier = Modifier.padding(14.dp),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
 
             orders.isEmpty() -> {
-                Text(
-                    text = "아직 주문내역이 없습니다.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                EmptyOrders()
             }
 
             else -> {
                 LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(orders) { order ->
+                    items(orders, key = { it.orderId }) { order ->
                         OrderCard(
                             order = order,
                             isCanceling = cancelingOrderId == order.orderId,
@@ -174,7 +214,9 @@ private fun OrderCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(18.dp)
@@ -188,7 +230,9 @@ private fun OrderCard(
                 ) {
                     Text(
                         text = order.storeName,
-                        style = MaterialTheme.typography.titleMedium
+                        color = Ink,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -196,51 +240,143 @@ private fun OrderCard(
                     Text(
                         text = "주문번호 ${order.orderNumber}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Muted
                     )
                 }
 
                 OrderStatusBadge(status = order.status)
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(15.dp))
 
-            Text(
-                text = "결제 금액 ${formatPrice(order.totalPrice)}",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = SoftOrange,
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "결제 금액",
+                        color = Ink,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = formatPrice(order.totalPrice),
+                        color = PassOrange,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "주문 시간 ${formatDateTime(order.createdAt)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Spacer(modifier = Modifier.height(14.dp))
+            OrderTimeRow(
+                label = "주문 시간",
+                value = formatDateTime(order.createdAt),
+                highlighted = false
             )
 
             if (!order.estimatedPickupTime.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "예상 픽업 시간 ${formatDateTime(order.estimatedPickupTime)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(modifier = Modifier.height(7.dp))
+                OrderTimeRow(
+                    label = "예상 픽업",
+                    value = formatDateTime(order.estimatedPickupTime),
+                    highlighted = true
                 )
             }
 
             if (order.status == "REQUESTED") {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(15.dp))
 
                 Button(
                     onClick = onCancelClick,
                     enabled = !isCanceling,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PassOrange,
+                        disabledContainerColor = Color(0xFFF0D7CB)
+                    )
                 ) {
-                    Text(if (isCanceling) "취소 처리 중..." else "주문 취소")
+                    Text(
+                        text = if (isCanceling) "취소 처리 중..." else "주문 취소",
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OrderTimeRow(
+    label: String,
+    value: String,
+    highlighted: Boolean
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(
+                    color = if (highlighted) PassOrange else Color(0xFFD8CCC6),
+                    shape = CircleShape
+                )
+        )
+        Spacer(modifier = Modifier.width(9.dp))
+        Text(
+            text = label,
+            color = Muted,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.width(72.dp)
+        )
+        Text(
+            text = value,
+            color = if (highlighted) PassOrange else Ink,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (highlighted) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+private fun EmptyOrders() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            modifier = Modifier.size(88.dp),
+            color = SoftOrange,
+            shape = CircleShape
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("☕", style = MaterialTheme.typography.displaySmall)
+            }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = "아직 주문내역이 없어요",
+            color = Ink,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "첫 픽업 주문을 시작해보세요.",
+            color = Muted,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
@@ -300,11 +436,12 @@ private fun OrderStatusBadge(
     Surface(
         shape = RoundedCornerShape(50),
         color = when (status) {
-            "REQUESTED" -> MaterialTheme.colorScheme.secondaryContainer
-            "ACCEPTED", "READY" -> MaterialTheme.colorScheme.primaryContainer
-            "COMPLETED" -> MaterialTheme.colorScheme.tertiaryContainer
-            "REJECTED", "CANCELED" -> MaterialTheme.colorScheme.errorContainer
-            else -> MaterialTheme.colorScheme.surfaceVariant
+            "REQUESTED" -> Color(0xFFFFE9DE)
+            "ACCEPTED" -> Color(0xFFFFF2D8)
+            "READY" -> Color(0xFFE3F4EA)
+            "COMPLETED" -> PageGray
+            "REJECTED", "CANCELED" -> Color(0xFFFFE8E8)
+            else -> PageGray
         }
     ) {
         Text(
@@ -314,9 +451,13 @@ private fun OrderStatusBadge(
                 vertical = 6.dp
             ),
             style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.ExtraBold,
             color = when (status) {
-                "REJECTED", "CANCELED" -> MaterialTheme.colorScheme.onErrorContainer
-                else -> MaterialTheme.colorScheme.onSurface
+                "REQUESTED" -> PassOrange
+                "ACCEPTED" -> Color(0xFFB66B00)
+                "READY" -> Color(0xFF24834E)
+                "REJECTED", "CANCELED" -> Color(0xFFC74343)
+                else -> Muted
             }
         )
     }

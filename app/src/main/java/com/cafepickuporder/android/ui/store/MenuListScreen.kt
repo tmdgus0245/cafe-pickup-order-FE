@@ -1,6 +1,9 @@
 package com.cafepickuporder.android.ui.store
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,9 +42,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import com.cafepickuporder.android.R
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.response.MenuCategoryResponse
 import com.cafepickuporder.android.data.response.MenuResponse
@@ -295,12 +304,71 @@ private fun MenuTopBar(
             modifier = Modifier.weight(1f)
         )
 
-        TextButton(onClick = onFavoriteClick) {
-            Text(
-                text = if (isFavorite) "★" else "☆",
+        Surface(
+            modifier = Modifier
+                .size(40.dp)
+                .clickable(onClick = onFavoriteClick),
+            shape = CircleShape,
+            color = if (isFavorite) SoftOrange else Color(0xFFFFF8F4),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (isFavorite) Color.Transparent else Color(0xFFFFD8C8)
+            )
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                FavoriteHeartIcon(selected = isFavorite)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoriteHeartIcon(selected: Boolean) {
+    Canvas(modifier = Modifier.size(19.dp)) {
+        val heart = Path().apply {
+            moveTo(size.width * 0.50f, size.height * 0.88f)
+            cubicTo(
+                size.width * 0.20f,
+                size.height * 0.68f,
+                size.width * 0.05f,
+                size.height * 0.47f,
+                size.width * 0.16f,
+                size.height * 0.27f
+            )
+            cubicTo(
+                size.width * 0.27f,
+                size.height * 0.08f,
+                size.width * 0.44f,
+                size.height * 0.12f,
+                size.width * 0.50f,
+                size.height * 0.28f
+            )
+            cubicTo(
+                size.width * 0.56f,
+                size.height * 0.12f,
+                size.width * 0.73f,
+                size.height * 0.08f,
+                size.width * 0.84f,
+                size.height * 0.27f
+            )
+            cubicTo(
+                size.width * 0.95f,
+                size.height * 0.47f,
+                size.width * 0.80f,
+                size.height * 0.68f,
+                size.width * 0.50f,
+                size.height * 0.88f
+            )
+            close()
+        }
+
+        if (selected) {
+            drawPath(path = heart, color = PassOrange)
+        } else {
+            drawPath(
+                path = heart,
                 color = PassOrange,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                style = Stroke(width = 2.dp.toPx())
             )
         }
     }
@@ -465,12 +533,27 @@ private fun MenuCard(
                 .background(PageGray),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = displayMenuStatus(menu.status),
-                color = if (menu.status == "ON_SALE") Muted else PassOrange,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
+            Image(
+                painter = painterResource(R.drawable.default_menu_coffee),
+                contentDescription = "${menu.name} 기본 이미지",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
+            if (menu.status != "ON_SALE") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.78f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = displayMenuStatus(menu.status),
+                        color = PassOrange,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
         }
     }
 

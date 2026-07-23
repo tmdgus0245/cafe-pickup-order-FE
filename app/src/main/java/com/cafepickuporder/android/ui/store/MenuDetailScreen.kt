@@ -1,6 +1,7 @@
 package com.cafepickuporder.android.ui.store
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,9 +37,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.cafepickuporder.android.R
 import com.cafepickuporder.android.data.model.CartItem
 import com.cafepickuporder.android.data.model.CartOption
 import com.cafepickuporder.android.data.remote.ApiClient
@@ -122,7 +126,11 @@ fun MenuDetailScreen(
                     menu = menu!!,
                     selectedOptions = selectedOptions,
                     onOptionSelected = { optionGroupId, option ->
-                        selectedOptions[optionGroupId] = option
+                        if (selectedOptions[optionGroupId]?.optionId == option.optionId) {
+                            selectedOptions.remove(optionGroupId)
+                        } else {
+                            selectedOptions[optionGroupId] = option
+                        }
                     },
                     onAddedToCart = onAddedToCart
                 )
@@ -268,10 +276,11 @@ private fun MenuHero(menu: MenuDetailResponse) {
                     .background(PageGray),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "MENU",
-                    color = Muted,
-                    style = MaterialTheme.typography.titleMedium
+                Image(
+                    painter = painterResource(R.drawable.default_menu_coffee),
+                    contentDescription = "${menu.name} 기본 이미지",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

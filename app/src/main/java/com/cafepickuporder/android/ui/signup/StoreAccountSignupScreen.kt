@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
-import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.MotionEvent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -53,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.cafepickuporder.android.BuildConfig
+import com.cafepickuporder.android.R
 import com.cafepickuporder.android.data.remote.ApiClient
 import com.cafepickuporder.android.data.remote.NaverLocalSearchClient
 import com.cafepickuporder.android.data.request.StoreAccountSignupRequest
@@ -65,6 +65,7 @@ import com.naver.maps.map.CameraUpdate
 import com.naver.maps.map.MapView
 import com.naver.maps.map.NaverMap
 import com.naver.maps.map.overlay.Marker
+import com.naver.maps.map.overlay.OverlayImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -74,7 +75,7 @@ import java.util.Locale
 private val emailPattern = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 private val phonePattern = Regex("^0\\d{1,2}-?\\d{3,4}-?\\d{4}$")
 private val timePattern = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
-private const val SYMBOL_SEARCH_MATCH_RADIUS_METERS = 50f
+private const val SYMBOL_SEARCH_MATCH_RADIUS_METERS = 120f
 
 @Composable
 fun StoreAccountSignupScreen(
@@ -312,10 +313,10 @@ private fun NaverCafeMapPicker(
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var userLocationKeywords by remember { mutableStateOf<List<String>>(emptyList()) }
     var hasMovedToInitialLocation by remember { mutableStateOf(false) }
-    var selectedCaption by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<NaverLocalSearchItem>>(emptyList()) }
     var searchMessage by remember { mutableStateOf("") }
+    var mapSelectionMessage by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var pendingSymbolSelection by remember { mutableStateOf<MapSymbolSelection?>(null) }
     var selectedMarker by remember { mutableStateOf<Marker?>(null) }
@@ -440,13 +441,8 @@ private fun NaverCafeMapPicker(
         if (BuildConfig.NAVER_SEARCH_CLIENT_ID.isBlank() ||
             BuildConfig.NAVER_SEARCH_CLIENT_SECRET.isBlank()
         ) {
-            latestOnCafeSelected(
-                selection.name,
-                selection.latitude,
-                selection.longitude,
-                "",
-                ""
-            )
+            mapSelectionMessage = "카페 여부를 확인할 검색 API 설정이 필요해요."
+            pendingSymbolSelection = null
             return@LaunchedEffect
         }
 
@@ -487,6 +483,17 @@ private fun NaverCafeMapPicker(
             if (bestMatch != null) {
                 val address = bestMatch.roadAddress.ifBlank { bestMatch.address }
                 val phone = bestMatch.telephone.orEmpty()
+                val position = LatLng(selection.latitude, selection.longitude)
+                naverMap?.let { map ->
+                    selectedMarker = showSelectedMarker(
+                        map = map,
+                        previousMarker = selectedMarker,
+                        caption = selection.name,
+                        position = position
+                    )
+                    map.moveCamera(CameraUpdate.scrollTo(position))
+                }
+                mapSelectionMessage = ""
                 latestOnCafeSelected(
                     selection.name,
                     selection.latitude,
@@ -495,22 +502,12 @@ private fun NaverCafeMapPicker(
                     phone
                 )
             } else {
-                latestOnCafeSelected(
-                    selection.name,
-                    selection.latitude,
-                    selection.longitude,
-                    "",
-                    ""
-                )
+                mapSelectionMessage = "카페·커피·디저트·베이커리 장소만 선택할 수 있어요."
             }
         } catch (_: Exception) {
-            latestOnCafeSelected(
-                selection.name,
-                selection.latitude,
-                selection.longitude,
-                "",
-                ""
-            )
+            mapSelectionMessage = "장소 종류를 확인하지 못했어요. 다시 시도해주세요."
+        } finally {
+            pendingSymbolSelection = null
         }
     }
 
@@ -521,21 +518,14 @@ private fun NaverCafeMapPicker(
         mapView.getMapAsync { map ->
             naverMap = map
             map.uiSettings.isZoomControlEnabled = false
-            map.uiSettings.isLocationButtonEnabled = true
+            map.uiSettings.isLocationButtonEnabled = false
             map.setOnSymbolClickListener { symbol ->
                 val caption = symbol.caption.trim()
                 if (caption.isBlank()) {
                     false
                 } else {
                     val position = symbol.position
-                    selectedCaption = caption
-                    selectedMarker = showSelectedMarker(
-                        map = map,
-                        previousMarker = selectedMarker,
-                        caption = caption,
-                        position = position
-                    )
-                    map.moveCamera(CameraUpdate.scrollTo(position))
+                    mapSelectionMessage = "카페 장소인지 확인하고 있어요..."
                     pendingSymbolSelection = MapSymbolSelection(
                         name = caption,
                         latitude = position.latitude,
@@ -606,7 +596,7 @@ private fun NaverCafeMapPicker(
                                 val position = LatLng(latitude, longitude)
                                 val map = naverMap
 
-                                selectedCaption = name
+                                mapSelectionMessage = ""
                                 if (map != null) {
                                     selectedMarker = showSelectedMarker(
                                         map = map,
@@ -635,18 +625,61 @@ private fun NaverCafeMapPicker(
                         .height(300.dp)
                 )
 
-                if (selectedCaption.isNotBlank()) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .clickable(enabled = naverMap != null) {
+                            val currentLocation =
+                                userLocation ?: findLastKnownLocation(context)
+                            if (currentLocation != null) {
+                                userLocation = currentLocation
+                                val position = LatLng(
+                                    currentLocation.latitude,
+                                    currentLocation.longitude
+                                )
+                                naverMap?.locationOverlay?.apply {
+                                    isVisible = true
+                                    this.position = position
+                                }
+                                naverMap?.moveCamera(
+                                    CameraUpdate.scrollAndZoomTo(position, 16.0)
+                                )
+                            } else {
+                                mapSelectionMessage = "현재 위치를 확인할 수 없어요."
+                            }
+                        },
+                    color = Color.White.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(50),
+                    shadowElevation = 2.dp
+                ) {
                     Text(
-                        text = "선택한 매장: $selectedCaption",
+                        text = "⌖  내 위치",
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(12.dp)
-                            .background(Color.White, RoundedCornerShape(999.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        color = PassOrange,
-                        style = MaterialTheme.typography.bodySmall,
+                            .padding(horizontal = 13.dp, vertical = 9.dp),
+                        color = if (userLocation != null) Ink else Muted,
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
+                }
+
+                if (mapSelectionMessage.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(12.dp),
+                        color = Color.White.copy(alpha = 0.95f),
+                        shape = RoundedCornerShape(12.dp),
+                        shadowElevation = 2.dp
+                    ) {
+                        Text(
+                            text = mapSelectionMessage,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            color = PassOrange,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -709,10 +742,12 @@ private fun showSelectedMarker(
     previousMarker?.map = null
     return Marker(position).apply {
         captionText = caption
-        captionColor = AndroidColor.rgb(255, 107, 72)
-        iconTintColor = AndroidColor.rgb(255, 107, 72)
-        width = 72
-        height = 96
+        captionColor = android.graphics.Color.rgb(71, 48, 38)
+        captionHaloColor = android.graphics.Color.WHITE
+        captionTextSize = 13f
+        icon = OverlayImage.fromResource(R.drawable.ic_cafe_map_marker)
+        width = 64
+        height = 80
         zIndex = 100
         this.map = map
     }

@@ -55,6 +55,8 @@ fun App() {
     var customerId by remember { mutableStateOf<Long?>(null) }
     var ownerStoreId by remember { mutableStateOf<Long?>(null) }
     var ownerAccessToken by remember { mutableStateOf<String?>(null) }
+    var loginAsOwner by remember { mutableStateOf(false) }
+    var homeMapMode by remember { mutableStateOf(false) }
     var lastBackPressedAt by remember { mutableStateOf(0L) }
 
     fun requestAppExit() {
@@ -111,6 +113,7 @@ fun App() {
 
     when (screen) {
         "login" -> LoginScreen(
+            initialOwnerMode = loginAsOwner,
             onLoginSuccess = { loggedInCustomerId ->
                 customerId = loggedInCustomerId
                 selectedTab = MainTab.Home
@@ -121,8 +124,14 @@ fun App() {
                 ownerAccessToken = accessToken
                 screen = "ownerOrders"
             },
-            onMoveToSignup = { screen = "signup" },
-            onMoveToOwnerSignup = { screen = "ownerSignup" }
+            onMoveToSignup = {
+                loginAsOwner = false
+                screen = "signup"
+            },
+            onMoveToOwnerSignup = {
+                loginAsOwner = true
+                screen = "ownerSignup"
+            }
         )
 
         "ownerOrders" -> StoreOwnerScreen(
@@ -136,16 +145,24 @@ fun App() {
         )
 
         "signup" -> SignupScreen(
-            onMoveToLogin = { screen = "login" }
+            onMoveToLogin = {
+                loginAsOwner = false
+                screen = "login"
+            }
         )
 
         "ownerSignup" -> StoreAccountSignupScreen(
-            onMoveToLogin = { screen = "login" }
+            onMoveToLogin = {
+                loginAsOwner = true
+                screen = "login"
+            }
         )
 
         "main" -> MainTabs(
             selectedTab = selectedTab,
             customerId = customerId ?: 0L,
+            homeMapMode = homeMapMode,
+            onHomeMapModeChanged = { homeMapMode = it },
             onTabSelected = { selectedTab = it },
             onStoreClick = { storeId ->
                 selectedStoreId = storeId
@@ -222,6 +239,8 @@ fun App() {
 private fun MainTabs(
     selectedTab: MainTab,
     customerId: Long,
+    homeMapMode: Boolean,
+    onHomeMapModeChanged: (Boolean) -> Unit,
     onTabSelected: (MainTab) -> Unit,
     onStoreClick: (Long) -> Unit,
     onMenuClick: (Long, Long) -> Unit,
@@ -238,6 +257,8 @@ private fun MainTabs(
         when (selectedTab) {
             MainTab.Home -> StoreListScreen(
                 modifier = Modifier.padding(innerPadding),
+                initialMapMode = homeMapMode,
+                onMapModeChanged = onHomeMapModeChanged,
                 onStoreClick = onStoreClick,
                 onMenuClick = onMenuClick
             )

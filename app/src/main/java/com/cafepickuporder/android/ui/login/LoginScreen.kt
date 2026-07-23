@@ -46,6 +46,7 @@ private enum class LoginMode {
 
 @Composable
 fun LoginScreen(
+    initialOwnerMode: Boolean = false,
     onLoginSuccess: (Long) -> Unit,
     onOwnerLoginSuccess: (Long, String) -> Unit,
     onMoveToSignup: () -> Unit,
@@ -54,7 +55,11 @@ fun LoginScreen(
     val context = LocalContext.current
     val tokenManager = remember { TokenManager(context) }
 
-    var mode by remember { mutableStateOf(LoginMode.Customer) }
+    var mode by remember(initialOwnerMode) {
+        mutableStateOf(
+            if (initialOwnerMode) LoginMode.Owner else LoginMode.Customer
+        )
+    }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
